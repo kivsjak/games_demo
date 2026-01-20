@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Hub</title>
+    <title>Dynamic Game Hub</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -15,7 +15,6 @@
             flex-direction: column;
             align-items: center;
         }
-
         h1 {
             font-size: 2.5rem;
             margin-bottom: 10px;
@@ -23,7 +22,6 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-
         .container {
             display: flex;
             gap: 40px;
@@ -31,15 +29,14 @@
             flex-wrap: wrap;
             justify-content: center;
         }
-
         .section {
             background: #161b22;
             padding: 25px;
             border-radius: 12px;
             border: 1px solid #30363d;
             width: 300px;
+            min-height: 100px;
         }
-
         .section-title {
             font-size: 1.2rem;
             font-weight: bold;
@@ -49,10 +46,9 @@
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-
         .done-title { color: #2ea043; border-color: #2ea043; }
         .beta-title { color: #f2cc60; border-color: #f2cc60; }
-
+        
         a {
             display: block;
             background: #21262d;
@@ -63,73 +59,81 @@
             border-radius: 6px;
             transition: all 0.2s ease;
             border-left: 4px solid transparent;
-            position: relative; /* Для іконки стрілочки */
+            word-break: break-all;
         }
-
-        a:hover {
-            background: #30363d;
-            transform: translateX(5px);
-        }
-
+        a:hover { background: #30363d; transform: translateX(5px); }
         .done-list a:hover { border-left-color: #2ea043; }
         .beta-list a:hover { border-left-color: #f2cc60; }
-
-        .status {
-            font-size: 0.8rem;
-            opacity: 0.6;
-            float: right;
-        }
-
-        /* Іконка зовнішнього посилання */
-        a::after {
-            content: "↗"; 
-            position: absolute;
-            right: -20px;
-            top: 12px;
-            opacity: 0;
-            transition: 0.2s;
-            color: #8b949e;
-        }
         
-        a:hover::after {
-            opacity: 1;
-            right: 5px;
-        }
+        .loading { color: #8b949e; font-style: italic; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
     <h1>GAMES LIBRARY</h1>
-    <p>Внутрішній хаб тестування</p>
+    <p>Автоматичний список білдів</p>
 
     <div class="container">
         
         <div class="section">
             <div class="section-title done-title">✅ Release Ready</div>
-            <div class="done-list">
-                <a href="done/GOLF_DONE.HTML" target="_blank">
-                    ⛳ Golf Demo
-                    <span class="status">v1.0</span>
-                </a>
+            <div id="done-list" class="done-list">
+                <div class="loading">Сканую папку done...</div>
             </div>
         </div>
 
         <div class="section">
             <div class="section-title beta-title">🚧 Beta Testing</div>
-            <div class="beta-list">
-                <a href="beta/ANTS_BETA_1.html" target="_blank">
-                    🐜 Ants vs Plants
-                    <span class="status">Beta 1</span>
-                </a>
-                
-                <a href="beta/moon_beta_11.html" target="_blank">
-                    🌑 Moon Project
-                    <span class="status">Build 11</span>
-                </a>
+            <div id="beta-list" class="beta-list">
+                <div class="loading">Сканую папку beta...</div>
             </div>
         </div>
 
     </div>
+
+    <script>
+        // --- НАЛАШТУВАННЯ (ПЕРЕВІР ЦЕ) ---
+        const USERNAME = 'kivsjak';         // Твій нік на гітхабі (з URL)
+        const REPO_NAME = 'srhiiy-efimtsev'; // Назва твого репозиторія
+        // ---------------------------------
+
+        async function fetchGames(folder, elementId) {
+            const container = document.getElementById(elementId);
+            const apiUrl = `https://api.github.com/repos/${USERNAME}/${REPO_NAME}/contents/${folder}`;
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error('Папка не знайдена або пуста');
+                
+                const data = await response.json();
+                container.innerHTML = ''; // Очистити "Loading..."
+
+                // Фільтруємо тільки HTML файли
+                const htmlFiles = data.filter(file => file.name.endsWith('.html') || file.name.endsWith('.HTML'));
+
+                if (htmlFiles.length === 0) {
+                    container.innerHTML = '<div class="loading">Немає HTML файлів</div>';
+                    return;
+                }
+
+                htmlFiles.forEach(file => {
+                    const link = document.createElement('a');
+                    link.href = file.path; // Шлях до файлу
+                    link.target = "_blank"; // Нова вкладка
+                    link.innerText = file.name.replace('.html', '').replace('.HTML', ''); // Прибираємо .html з назви
+                    container.appendChild(link);
+                });
+
+            } catch (error) {
+                console.error(error);
+                container.innerHTML = `<div class="loading">Нічого немає в папці ${folder}</div>`;
+            }
+        }
+
+        // Запускаємо сканування папок
+        fetchGames('done', 'done-list');
+        fetchGames('beta', 'beta-list');
+    </script>
 
 </body>
 </html>
