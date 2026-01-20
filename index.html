@@ -3,154 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Games Hub | Elite Glass UI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;900&family=Lexend+Deca:wght@400;600&display=swap" rel="stylesheet">
+    <title>Games Demo | Liquid Glass Elite</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@300;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --mouse-x: 50%;
             --mouse-y: 50%;
-            --glass-bg: rgba(255, 255, 255, 0.08);
-            --glass-border-light: rgba(255, 255, 255, 0.4);
-            --glass-border-dark: rgba(0, 0, 0, 0.5);
-            --text-main: #e0e0e0;
-            --accent-blue: #00e0ff;
-            --bg-dark: #020408;
-            --bg-light: #152a4a;
+            --accent: #00f2ff;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Lexend Deca', sans-serif; }
 
         body {
             overflow: hidden;
             width: 100vw; height: 100vh;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            background-color: var(--bg-dark);
-            /* В'язкий рідкий градієнт */
-            background-image: radial-gradient(circle at var(--mouse-x) var(--mouse-y), var(--bg-light) 0%, var(--bg-dark) 100%);
-            font-family: 'Lexend Deca', sans-serif; /* Основний текст */
-            color: var(--text-main);
+            background-color: #020408;
+            /* В'язкий градієнт фону */
+            background-image: radial-gradient(circle at var(--mouse-x) var(--mouse-y), #0d1a2f 0%, #020408 100%);
         }
 
-        /* Яскраві динамічні плями (Liquid Blobs) */
-        .blob {
+        /* Динамічні плями */
+        .glow-spot {
             position: absolute;
             border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.3;
+            filter: blur(120px);
+            opacity: 0.2;
             pointer-events: none;
-            z-index: 0;
-            will-change: transform;
+            z-index: -1;
         }
-        .b1 { top: 10%; left: 10%; width: 40vw; height: 40vw; background: var(--accent-blue); animation: blob-float-1 20s infinite alternate; }
-        .b2 { bottom: 10%; right: 10%; width: 50vw; height: 50vw; background: #3d42ff; animation: blob-float-2 25s infinite alternate; }
+        .gs1 { top: 10%; left: 10%; width: 40vw; height: 40vw; background: var(--accent); }
+        .gs2 { bottom: 10%; right: 10%; width: 50vw; height: 50vw; background: #2e3192; }
 
-        @keyframes blob-float-1 { 0% { transform: translate(0, 0); } 100% { transform: translate(50px, 80px); } }
-        @keyframes blob-float-2 { 0% { transform: translate(0, 0); } 100% { transform: translate(-60px, -40px); } }
-
-
-        /* ЗАГОЛОВОК - Inter Bold */
         h1 {
-            position: relative;
-            z-index: 100;
-            font-family: 'Inter', sans-serif; /* Преміум шрифт для заголовків */
             font-size: 4.5rem;
-            font-weight: 900; /* Extra Bold */
-            letter-spacing: -2px;
+            font-weight: 800;
+            letter-spacing: -3px;
             margin-bottom: 30px;
-            color: var(--text-main);
-            text-align: center;
+            color: #fff;
             text-transform: uppercase;
-            text-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            animation: titleReveal 1.5s cubic-bezier(0.19, 1, 0.22, 1);
+            /* Ефект Reveal */
+            animation: reveal 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+            text-shadow: 0 20px 40px rgba(0,0,0,0.5);
         }
 
-        @keyframes titleReveal {
-            0% { opacity: 0; transform: translateY(-50px) scale(0.9); filter: blur(20px); }
+        @keyframes reveal {
+            0% { opacity: 0; transform: translateY(30px) scale(0.9); filter: blur(10px); }
             100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
 
-        /* КОНТЕЙНЕР СКЛА (Windhawk Style) */
-        #main-container {
-            position: relative;
-            z-index: 10;
+        /* Обгортка для Floater, щоб не ламати анімацію появи */
+        #floater-wrapper {
+            will-change: transform;
             display: flex;
-            gap: 30px;
+            justify-content: center;
+        }
+
+        #main-container {
+            display: flex;
+            gap: 25px;
             padding: 35px;
-            border-radius: 35px;
-            background: var(--glass-bg);
+            border-radius: 40px;
+            background: var(--glass);
             backdrop-filter: blur(30px);
             -webkit-backdrop-filter: blur(30px);
-            border-top: 1.5px solid var(--glass-border-light);
-            border-left: 1.2px solid rgba(255, 255, 255, 0.1);
-            border-right: 1.2px solid rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid var(--glass-border-dark);
-            box-shadow: 0 40px 80px rgba(0,0,0,0.7);
-            will-change: transform; /* Оптимізація GPU для плавання */
+            border: 1px solid var(--border);
+            border-top: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+            /* Анімація появи */
+            animation: container-in 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes container-in {
+            0% { opacity: 0; transform: scale(0.8) translateY(40px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
         }
 
         .panel { width: 320px; }
 
         .label {
-            font-family: 'Inter', sans-serif; /* Шрифт для лейблів */
-            font-size: 0.8rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 4px;
-            margin-bottom: 25px; color: rgba(255,255,255,0.5);
+            font-size: 0.7rem; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 5px;
+            margin-bottom: 25px; color: rgba(255,255,255,0.3);
             display: flex; align-items: center; gap: 10px;
         }
 
-        /* КАРТКИ З БАУНСОМ (Lexend Deca) */
+        /* Солідні картки */
         .game-card {
             display: flex; justify-content: space-between; align-items: center;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 22px 28px; border-radius: 22px;
-            color: var(--text-main); text-decoration: none;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 22px 28px; border-radius: 24px;
+            color: #fff; text-decoration: none;
             margin-bottom: 15px;
             opacity: 0;
-            transform: translateY(30px) scale(0.9); /* Початковий стан для анімації */
-            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), /* Плавний hover */
-                        background 0.3s ease-out,
-                        border-color 0.3s ease-out,
-                        box-shadow 0.3s ease-out;
-            will-change: transform, opacity; /* Оптимізація GPU для анімацій */
+            transform: scale(0.6);
+            transition: 
+                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 0.3s ease,
+                border 0.3s ease;
         }
 
-        /* Анімація появи картки (тільки opacity та transform) */
-        .game-card.visible {
-            animation: cardReveal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-        }
-
-        @keyframes cardReveal {
-            0% { opacity: 0; transform: translateY(30px) scale(0.9); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
+        .game-card.animate {
+            opacity: 1; transform: scale(1);
         }
 
         .game-card:hover {
-            background: rgba(255, 255, 255, 0.15);
-            transform: scale(1.03) translateX(10px) !important; /* !important, щоб не конфліктувало з animation */
-            border-color: var(--accent-blue);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(12px) scale(1.02) !important;
+            border-color: var(--accent);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4);
         }
 
-        .game-card b { font-family: 'Lexend Deca', sans-serif; font-size: 1.2rem; font-weight: 600; }
-        .game-card i { font-family: 'Lexend Deca', sans-serif; font-style: normal; font-size: 11px; font-weight: 600; color: var(--accent-blue); opacity: 0.8; }
+        .game-card b { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.5px; }
+        .game-card i { font-style: normal; font-size: 10px; font-weight: 800; color: var(--accent); opacity: 0.6; }
     </style>
 </head>
 <body>
 
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
+    <div class="glow-spot gs1"></div>
+    <div class="glow-spot gs2"></div>
 
     <h1>Games Demo</h1>
 
-    <div id="main-container">
-        <div class="panel">
-            <div class="label">● Production</div>
-            <div id="done-list"></div>
-        </div>
-        <div class="panel">
-            <div class="label">● Testing</div>
-            <div id="beta-list"></div>
+    <div id="floater-wrapper">
+        <div id="main-container">
+            <div class="panel">
+                <div class="label">● Stable</div>
+                <div id="done-list"></div>
+            </div>
+            <div class="panel">
+                <div class="label">● Testing</div>
+                <div id="beta-list"></div>
+            </div>
         </div>
     </div>
 
@@ -158,60 +145,73 @@
         let tx = innerWidth / 2, ty = innerHeight / 2;
         let cx = tx, cy = ty;
 
-        window.addEventListener('mousemove', e => { tx = e.clientX; ty = e.clientY; });
+        document.addEventListener('mousemove', (e) => {
+            tx = e.clientX; ty = e.clientY;
+        });
 
-        // М'яке плавання панелі (оптимізовано)
+        // Клас Floater для плавного плавання
         class Floater {
-            constructor(el, r) { this.el = el; this.r = r; this.ax = Math.random()*10; this.ay = Math.random()*10; }
+            constructor(el, range) {
+                this.el = el;
+                this.range = range;
+                this.ax = Math.random() * 10;
+                this.ay = Math.random() * 10;
+            }
             update() {
-                this.ax += 0.006; this.ay += 0.005;
-                const x = Math.sin(this.ax) * this.r;
-                const y = Math.cos(this.ay) * this.r;
-                this.el.style.transform = `translate3d(${x}px, ${y}px, 0)`; /* translate3d для GPU */
+                this.ax += 0.005;
+                this.ay += 0.004;
+                const x = Math.sin(this.ax) * this.range;
+                const y = Math.cos(this.ay) * this.range;
+                // Рухаємо wrapper, щоб не заважати внутрішнім анімаціям
+                this.el.style.transform = `translate(${x}px, ${y}px)`;
             }
         }
 
-        const containerFloater = new Floater(document.getElementById('main-container'), 1.5);
+        const wrapper = document.getElementById('floater-wrapper');
+        const panelFloat = new Floater(wrapper, 1.5);
 
-        function animationLoop() {
-            // В'язкість градієнта
-            cx += (tx - cx) * 0.01;
+        function animate() {
+            // В'язкість фону
+            cx += (tx - cx) * 0.01; 
             cy += (ty - cy) * 0.01;
-            document.body.style.setProperty('--mouse-x', `${(cx / innerWidth) * 100}%`);
-            document.body.style.setProperty('--mouse-y', `${(cy / innerHeight) * 100}%`);
             
-            containerFloater.update();
-            requestAnimationFrame(animationLoop);
+            document.body.style.setProperty('--mouse-x', `${(cx / innerWidth * 100)}%`);
+            document.body.style.setProperty('--mouse-y', `${(cy / innerHeight * 100)}%`);
+            
+            panelFloat.update();
+            requestAnimationFrame(animate);
         }
-        animationLoop();
+        animate();
 
-        async function fetchGames() {
+        async function load() {
             try {
-                const r = await fetch(`https://api.github.com/repos/kivsjak/srhiiy-efimtsev/contents/?t=${Date.now()}`);
-                const files = await r.json();
+                const res = await fetch(`https://api.github.com/repos/kivsjak/srhiiy-efimtsev/contents/?t=${Date.now()}`);
+                const files = await res.json();
+                
                 const dList = document.getElementById('done-list');
                 const bList = document.getElementById('beta-list');
 
                 files.forEach((f, i) => {
-                    const name = f.name.toUpperCase();
-                    if (name.endsWith('.HTML') && name !== 'INDEX.HTML') {
-                        let target = name.includes('DONE') ? dList : (name.includes('BETA') ? bList : null);
+                    const n = f.name.toUpperCase();
+                    if (n.endsWith('.HTML') && n !== 'INDEX.HTML') {
+                        let target = n.includes('DONE') ? dList : (n.includes('BETA') ? bList : null);
                         if (target) {
                             const a = document.createElement('a');
                             a.className = 'game-card';
                             a.href = f.name;
                             a.target = '_blank';
                             a.innerHTML = `<b>${f.name.split('.')[0]}</b><i>RUN →</i>`;
-                            target.appendChild(a);
                             
-                            // Анімація баунсу з затримкою
-                            setTimeout(() => a.classList.add('visible'), 400 + (i * 150));
+                            target.appendChild(a);
+
+                            // Анімація появи з баунсом (без багів)
+                            setTimeout(() => a.classList.add('animate'), 500 + (i * 120));
                         }
                     }
                 });
-            } catch(e) { console.error("API failed to fetch games."); }
+            } catch(e) {}
         }
-        fetchGames();
+        load();
     </script>
 </body>
 </html>
