@@ -92,10 +92,10 @@
     </div>
 
     <script>
-        // --- НАЛАШТУВАННЯ (ПЕРЕВІР ЦЕ) ---
-        const USERNAME = 'kivsjak';         // Твій нік на гітхабі (з URL)
-        const REPO_NAME = 'srhiiy-efimtsev'; // Назва твого репозиторія
-        // ---------------------------------
+        // --- НАЛАШТУВАННЯ ---
+        const USERNAME = 'kivsjak';         
+        const REPO_NAME = 'srhiiy-efimtsev'; 
+        // --------------------
 
         async function fetchGames(folder, elementId) {
             const container = document.getElementById(elementId);
@@ -103,13 +103,18 @@
 
             try {
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error('Папка не знайдена або пуста');
+                if (!response.ok) {
+                     // Якщо папка ще не створилась (404 від API)
+                     if(response.status === 404) {
+                        throw new Error(`Папка ${folder} ще не знайдена (почекай деплой)`);
+                     }
+                     throw new Error('Помилка доступу');
+                }
                 
                 const data = await response.json();
-                container.innerHTML = ''; // Очистити "Loading..."
+                container.innerHTML = ''; 
 
-                // Фільтруємо тільки HTML файли
-                const htmlFiles = data.filter(file => file.name.endsWith('.html') || file.name.endsWith('.HTML'));
+                const htmlFiles = data.filter(file => file.name.toUpperCase().endsWith('.HTML'));
 
                 if (htmlFiles.length === 0) {
                     container.innerHTML = '<div class="loading">Немає HTML файлів</div>';
@@ -118,19 +123,22 @@
 
                 htmlFiles.forEach(file => {
                     const link = document.createElement('a');
-                    link.href = file.path; // Шлях до файлу
-                    link.target = "_blank"; // Нова вкладка
-                    link.innerText = file.name.replace('.html', '').replace('.HTML', ''); // Прибираємо .html з назви
+                    
+                    // МАГІЯ ТУТ: encodeURIComponent лікує пробіли та спецсимволи
+                    // Ми жорстко задаємо шлях: папка + / + ім'я файлу
+                    link.href = folder + '/' + encodeURIComponent(file.name);
+                    
+                    link.target = "_blank"; 
+                    link.innerText = file.name.replace(/\.html$/i, ''); 
                     container.appendChild(link);
                 });
 
             } catch (error) {
                 console.error(error);
-                container.innerHTML = `<div class="loading">Нічого немає в папці ${folder}</div>`;
+                container.innerHTML = `<div class="loading">${error.message}</div>`;
             }
         }
 
-        // Запускаємо сканування папок
         fetchGames('done', 'done-list');
         fetchGames('beta', 'beta-list');
     </script>
