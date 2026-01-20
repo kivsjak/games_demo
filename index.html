@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WindowGlass Hub | Bug-Free</title>
+    <title>WindowGlass Game Hub</title>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
     <style>
         :root {
+            /* Кольори з твого конфігу Windhawk */
             --bg-tint: rgba(166, 166, 166, 0.12);
+            --glass-border: rgba(255, 255, 255, 0.25);
             --text-muted: #a6a6a6;
             --mouse-x: 50%;
             --mouse-y: 50%;
@@ -17,78 +19,114 @@
 
         body {
             overflow: hidden;
-            width: 100vw; height: 100vh;
-            display: flex; justify-content: center; align-items: center;
-            background: linear-gradient(135deg, #111111, #0a0d12, #020408);
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Динамічний триколірний фон */
+            background: linear-gradient(135deg, #1a1a1a, #0d1117, #020408);
             background-size: 400% 400%;
             animation: deepFlow 30s ease infinite;
         }
 
+        /* Анімація перетікання фону */
         @keyframes deepFlow {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
 
+        /* В'язкий прожектор на фоні */
         .spotlight {
             position: fixed;
             inset: 0;
             background: radial-gradient(
                 circle 1000px at var(--mouse-x) var(--mouse-y), 
-                rgba(166, 166, 166, 0.08) 0%, 
+                rgba(88, 166, 255, 0.08) 0%, 
                 transparent 100%
             );
             z-index: -1;
             pointer-events: none;
-            will-change: background;
         }
 
+        #game-stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--text-muted);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        /* МАЙЖЕ НЕПОМІТНЕ ПЛАВАННЯ */
         #main-container {
             display: flex;
             gap: 20px;
             padding: 25px;
-            border-radius: 25px;
+            border-radius: 25px; /* CornerRadius=25 */
             background: var(--bg-tint);
-            backdrop-filter: blur(25px);
+            backdrop-filter: blur(25px); /* BlurAmount="25" */
             -webkit-backdrop-filter: blur(25px);
-            /* Windhawk Border System */
-            border-top: 1.2px solid rgba(255, 255, 255, 0.3);
-            border-left: 1.2px solid rgba(255, 255, 255, 0.1);
+            
+            /* Складна рамка як у Windhawk LinearGradientBrush */
+            border-top: 1.2px solid rgba(255, 255, 255, 0.35);
+            border-left: 1.2px solid rgba(255, 255, 255, 0.15);
             border-right: 1.2px solid rgba(0, 0, 0, 0.2);
             border-bottom: 1px solid rgba(0, 0, 0, 0.4);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            will-change: transform;
         }
 
-        .panel { width: 300px; min-height: 380px; padding: 15px; }
+        .panel {
+            width: 300px;
+            min-height: 380px;
+            padding: 20px;
+        }
 
         .label {
-            font-size: 0.7rem; font-weight: 900;
-            text-transform: uppercase; letter-spacing: 3px;
-            margin-bottom: 25px; color: var(--text-muted);
-            display: flex; align-items: center; gap: 8px;
-            opacity: 0.7;
+            font-size: 0.7rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 25px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .game-card {
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 18px 22px; border-radius: 18px;
-            color: var(--text-muted); text-decoration: none;
-            margin-bottom: 12px;
-            transition: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            padding: 16px 20px;
+            border-radius: 15px;
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-bottom: 10px;
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
         .game-card:hover {
             background: rgba(255, 255, 255, 0.08);
-            transform: scale(1.03) translateX(5px);
+            transform: scale(1.02);
             color: #fff;
             border-color: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
 
-        .game-card b { font-size: 0.95rem; font-weight: 600; letter-spacing: -0.2px; }
-        .game-card i { font-style: normal; font-size: 10px; opacity: 0.4; font-weight: 800; }
+        .game-card b { font-size: 0.95rem; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -96,13 +134,15 @@
 <div class="spotlight"></div>
 
 <div id="game-stage">
+    <h1>GAMES DEMO</h1>
+
     <div id="main-container">
         <div class="panel">
-            <div class="label">● Stable</div>
+            <div class="label">● Stable Builds</div>
             <div id="done-list"></div>
         </div>
         <div class="panel">
-            <div class="label">● Testing</div>
+            <div class="label">● Experimental</div>
             <div id="beta-list"></div>
         </div>
     </div>
@@ -112,23 +152,22 @@
     let targetX = 50, targetY = 50;
     let currentX = 50, currentY = 50;
 
-    // В'язка мишка
     document.addEventListener('mousemove', (e) => {
         targetX = (e.clientX / window.innerWidth) * 100;
         targetY = (e.clientY / window.innerHeight) * 100;
     });
 
-    // Ледь помітне плавання (Floater)
+    // МІНІМАЛЬНЕ ПЛАВАННЯ (range: 0.7)
     class Floater {
         constructor(el, range) {
             this.el = el;
             this.range = range;
-            this.angleX = Math.random() * 10;
-            this.angleY = Math.random() * 10;
+            this.angleX = Math.random() * 5;
+            this.angleY = Math.random() * 5;
         }
         update() {
-            this.angleX += 0.007;
-            this.angleY += 0.006;
+            this.angleX += 0.008;
+            this.angleY += 0.007;
             const x = Math.sin(this.angleX) * this.range;
             const y = Math.cos(this.angleY) * this.range;
             this.el.style.transform = `translate(${x}px, ${y}px)`;
@@ -136,49 +175,40 @@
     }
 
     const container = document.getElementById('main-container');
-    const panelFloat = new Floater(container, 0.6);
+    const floater = new Floater(container, 0.7);
 
     function animate() {
+        // Екстремальна в'язкість для фону
         currentX += (targetX - currentX) * 0.008; 
         currentY += (targetY - currentY) * 0.008;
         document.body.style.setProperty('--mouse-x', `${currentX}%`);
         document.body.style.setProperty('--mouse-y', `${currentY}%`);
         
-        panelFloat.update();
+        floater.update();
         requestAnimationFrame(animate);
     }
     animate();
 
     async function load() {
-        const dList = document.getElementById('done-list');
-        const bList = document.getElementById('beta-list');
-        
         try {
             const res = await fetch(`https://api.github.com/repos/kivsjak/srhiiy-efimtsev/contents/?t=${Date.now()}`);
-            if (!res.ok) throw new Error();
             const files = await res.json();
+            const dList = document.getElementById('done-list');
+            const bList = document.getElementById('beta-list');
 
             files.forEach(f => {
                 const n = f.name.toUpperCase();
                 if (n.endsWith('.HTML') && n !== 'INDEX.HTML') {
-                    // Фікс бага: сортування
-                    let target = null;
-                    if (n.includes('DONE')) target = dList;
-                    else if (n.includes('BETA')) target = bList;
-
-                    if (target) {
-                        const a = document.createElement('a');
-                        a.className = 'game-card';
-                        a.href = f.name;
-                        a.target = '_blank';
-                        a.innerHTML = `<b>${f.name.split('.')[0]}</b><i>EXE</i>`;
-                        target.appendChild(a);
-                    }
+                    const target = n.includes('DONE') ? dList : bList;
+                    const card = document.createElement('a');
+                    card.className = 'game-card';
+                    card.href = f.name;
+                    card.target = '_blank';
+                    card.innerHTML = `<b>${f.name.split('.')[0]}</b><span style="font-size: 10px; opacity: 0.5;">EXE</span>`;
+                    target.appendChild(card);
                 }
             });
-        } catch(e) {
-            dList.innerHTML = "<span style='opacity:0.2; font-size:12px;'>Unable to fetch.</span>";
-        }
+        } catch(e) {}
     }
     load();
 </script>
