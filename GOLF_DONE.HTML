@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golf Gambling Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #game {
+            width: 1920px;
+            height: 1080px;
+            transform-origin: top left;
+            position: relative;
+            background: #000;
+            z-index: 0;
+            overflow: hidden;
+        }
+        
+        /* --- LAYERS --- */
+        
+        .sky-layer, .sky-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+        }
+        .sky-overlay { opacity: 0; transition: opacity 1.5s ease-in-out; }
+
+        .ground-layer-base, .ground-layer-overlay {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; z-index: 10;
+        }
+        .ground-layer-overlay { opacity: 0; transition: opacity 1.5s ease-in-out; }
+
+        /* UI */
+        .top-bar {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 90%; height: 60px;
+            background: rgba(0,0,0,0.6);
+            border: 2px solid rgba(255,255,255,0.3); border-radius: 15px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 40px; z-index: 100; backdrop-filter: blur(5px);
+        }
+        
+        .zone-selector {
+            position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 100;
+        }
+        
+        .zone-btn {
+            width: 120px; height: 80px;
+            border: 3px solid rgba(255,255,255,0.8); background: rgba(0,0,0,0.5);
+            cursor: pointer; font-size: 16px; color: white; border-radius: 8px; transition: all 0.2s;
+        }
+        .zone-btn:hover { transform: scale(1.05); background: rgba(255,255,255,0.2); }
+        .zone-btn.active { background: rgba(255,215,0,0.9); border-color: gold; color: black; }
+        
+        /* Celestial Pivot */
+        .celestial-pivot {
+            position: absolute; bottom: -500px; left: 50%;
+            width: 0; height: 0; z-index: 1;
+            transition: transform 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sun {
+            position: absolute; width: 100px; height: 100px;
+            background: radial-gradient(circle, #FFF59D 0%, #FFD54F 50%, #FFA726 100%);
+            border-radius: 50%; box-shadow: 0 0 80px rgba(255, 193, 7, 0.9);
+            left: -1400px; top: 0; transform: translate(-50%, -50%);
+        }
+        
+        .moon {
+            position: absolute; width: 80px; height: 80px;
+            background: radial-gradient(circle, #F5F5DC 0%, #E8E8D0 100%);
+            border-radius: 50%; box-shadow: 0 0 40px rgba(245, 245, 220, 0.6);
+            left: 1400px; top: 0; transform: translate(-50%, -50%);
+        }
+        .moon::before {
+            content: ''; position: absolute; width: 70px; height: 70px;
+            background: rgba(0,0,0,0.5); border-radius: 50%; top: -10px; left: 15px; filter: blur(8px);
+        }
+        
+        .star {
+            position: absolute; width: 4px; height: 4px; background: white; border-radius: 50%; opacity: 0;
+            transition: opacity 1.0s; animation: twinkle 3s ease-in-out infinite; z-index: 1;
+        }
+        .star.active { opacity: 1; }
+        @keyframes twinkle { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+        
+        /* Clouds */
+        .cloud {
+            position: absolute; background: rgba(255,255,255,0.8); border-radius: 100px; opacity: 0.8;
+            animation: driftCloud linear infinite; z-index: 2;
+        }
+        .cloud::before, .cloud::after { content: ''; position: absolute; background: inherit; border-radius: 100px; }
+        
+        .cloud-small { width: 80px; height: 30px; }
+        .cloud-small::before { width: 40px; height: 40px; top: -20px; left: 15px; }
+        .cloud-small::after { width: 50px; height: 35px; top: -15px; right: 15px; }
+        
+        .cloud-medium { width: 100px; height: 40px; }
+        .cloud-medium::before { width: 50px; height: 50px; top: -25px; left: 20px; }
+        .cloud-medium::after { width: 60px; height: 45px; top: -20px; right: 20px; }
+        
+        .cloud-large { width: 140px; height: 50px; }
+        .cloud-large::before { width: 70px; height: 70px; top: -35px; left: 25px; }
+        .cloud-large::after { width: 80px; height: 60px; top: -30px; right: 25px; }
+        
+        @keyframes driftCloud { from { transform: translateX(-200px); } to { transform: translateX(2100px); } }
+
+        /* Obstacles & Game Field */
+        .obstacles {
+            position: absolute; bottom: calc(50% - 10px); left: 0; right: 0; height: 100px;
+            pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 11;
+        }
+        .obstacles.active { opacity: 1; }
+        
+        /* BOUNCE ANIMATION FOR OBSTACLES (Restored) */
+        @keyframes popIn {
+            0% { transform: scale(0); }
+            60% { transform: scale(1.1); }
+            80% { transform: scale(0.95); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes popInLarge {
+            0% { transform: scale(0); }
+            60% { transform: scale(2.2); }
+            80% { transform: scale(1.9); }
+            100% { transform: scale(2); }
+        }
+
+        /* CLEAN SIMPLE OBSTACLES (No Textures, just shapes) */
+        .grass-tuft { 
+            position: absolute; width: 50px; height: 70px; 
+            background: #2F6B2F; 
+            bottom: 0; border-radius: 50% 50% 0 0; transform-origin: bottom center; 
+        }
+        
+        .rock { 
+            position: absolute; width: 45px; height: 40px; 
+            background: #696969; 
+            bottom: 0; border-radius: 40% 40% 0 0; transform-origin: bottom center; 
+        }
+        
+        .tree { position: absolute; bottom: 0; width: 50px; height: 90px; transform-origin: bottom center; }
+        .tree.large { transform: scale(2); }
+        .tree-trunk { width: 12px; height: 35px; background: #3E2723; margin: 0 auto; position: absolute; bottom: 0; left: 19px; }
+        .tree-crown { 
+            width: 50px; height: 55px; 
+            background: #228B22; 
+            border-radius: 50%; position: absolute; bottom: 25px; left: 0; 
+        }
+        
+        .sand-dune { 
+            position: absolute; width: 120px; height: 30px; 
+            background: #D2B48C; 
+            bottom: 0; border-radius: 50% 50% 0 0; transform-origin: bottom center; 
+        }
+
+        /* --- GOLF CART --- */
+        .golf-cart {
+            position: absolute;
+            bottom: calc(50% - 15px);
+            left: 30px; 
+            width: 80px; height: 60px;
+            z-index: 15; 
+            transform: scaleX(-1);
+        }
+        .cart-body {
+            position: absolute; bottom: 10px; left: 0; width: 70px; height: 30px;
+            background: #eee; border-radius: 5px 15px 5px 5px; z-index: 2; border: 1px solid #ccc;
+        }
+        .cart-roof {
+            position: absolute; top: 0; left: -5px; width: 80px; height: 6px;
+            background: #ddd; border-radius: 3px; z-index: 3;
+        }
+        .cart-pole-front { position: absolute; top: 5px; right: 15px; width: 3px; height: 35px; background: #bbb; z-index: 1; }
+        .cart-pole-back { position: absolute; top: 5px; left: 5px; width: 3px; height: 35px; background: #bbb; z-index: 1; }
+        .cart-wheel-front { position: absolute; bottom: 0; right: 12px; width: 18px; height: 18px; background: #222; border-radius: 50%; z-index: 3; border: 2px solid #555; }
+        .cart-wheel-back { position: absolute; bottom: 0; left: 5px; width: 18px; height: 18px; background: #222; border-radius: 50%; z-index: 3; border: 2px solid #555; }
+        .cart-seat { position: absolute; bottom: 25px; left: 10px; width: 25px; height: 15px; background: #d2b48c; border-radius: 3px; z-index: 2; }
+        .cart-steering { position: absolute; bottom: 35px; right: 20px; width: 2px; height: 10px; background: #333; transform: rotate(30deg); z-index: 2; }
+
+        .game-field { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 20; }
+
+        /* GOLFER */
+        .golfer-container {
+            position: absolute; bottom: calc(50% - 10px); left: 100px; width: 50px; height: 85px;
+            cursor: grab; pointer-events: auto; transition: bottom 0.15s ease-out;
+        }
+        .golfer-container.dragging { cursor: grabbing; }
+        .golfer-container.flying { transform: translateY(-30px); }
+        
+        .golfer-body { 
+            position: absolute; width: 18px; height: 36px; background: #ffffff;
+            border-radius: 8px 8px 4px 4px; left: 16px; bottom: 30px; z-index: 2;
+        }
+        .golfer-body::before { 
+            content: ''; position: absolute; top: 0; left: 2px; width: 14px; height: 6px;
+            border-bottom: 2px solid #e0e0e0; border-left: 2px solid #e0e0e0; border-right: 2px solid #e0e0e0; box-sizing: border-box;
+        }
+        .golfer-head { 
+            position: absolute; width: 20px; height: 20px; background: #FFD1BA; border-radius: 50%;
+            left: 15px; bottom: 62px; transform-origin: bottom center; transition: transform 0.1s ease-out; z-index: 3;
+        }
+        .golfer-head::before { 
+            content: ''; position: absolute; top: 3px; left: -2px; width: 24px; height: 6px;
+            background: #ffffff; border-radius: 4px; transform: rotate(-5deg);
+        }
+        .golfer-head::after { 
+            content: ''; position: absolute; top: -2px; left: 1px; width: 18px; height: 10px;
+            background: #ffffff; border-radius: 50% 50% 0 0;
+        }
+        .golfer-arm { 
+            position: absolute; width: 6px; height: 26px; 
+            background: linear-gradient(to bottom, #ffffff 40%, #FFD1BA 40%);
+            border-radius: 3px; bottom: 38px; transform-origin: top center; 
+            transition: transform 0.1s ease-out; will-change: transform;
+        }
+        .golfer-arm.left { 
+            left: 12px; z-index: 3; 
+            background: linear-gradient(to bottom, #ffffff 40%, #FFD1BA 40%, #FFD1BA 70%, #eeeeee 70%); 
+        }
+        .golfer-arm.right { left: 32px; z-index: 1; }
+        .golfer-leg { 
+            position: absolute; width: 7px; height: 32px; background: #d2b48c; border-radius: 3px; 
+            bottom: 0; transform-origin: top center; transition: transform 0.1s ease-out; will-change: transform; z-index: 1;
+        }
+        .golfer-leg::after { 
+            content: ''; position: absolute; bottom: 0; left: -1px; width: 9px; height: 6px;
+            background: #444; border-radius: 2px 2px 4px 4px;
+        }
+        .golfer-leg.left { left: 16px; }
+        .golfer-leg.right { right: 16px; }
+        
+        /* Shadow Fix: Stays on ground */
+        .golfer-shadow { 
+            position: absolute; width: 40px; height: 10px; background: rgba(0,0,0,0.4); 
+            border-radius: 50%; bottom: -5px; left: 5px; 
+            transition: all 0.15s ease-out; 
+        }
+        .golfer-container.flying .golfer-shadow {
+            transform: translateY(30px) scale(0.6); 
+            opacity: 0.3;
+        }
+
+        .golf-club {
+            position: absolute; bottom: -35px; left: -2px; width: 4px; height: 40px;
+            background: silver; transform-origin: top center;
+        }
+        .golf-club::after { 
+            content: ''; position: absolute; bottom: 0; left: -6px; width: 12px; height: 8px;
+            background: #333; border-radius: 4px 0 2px 4px;
+        }
+        .golfer-arm.left .golf-club { display: block; }
+        .golfer-arm.right .golf-club { display: none; }
+
+        .golfer-container.swinging .golfer-arm { animation: swingAction 0.4s ease-in-out forwards; }
+        
+        @keyframes swingAction {
+            0% { transform: rotate(0deg); }
+            30% { transform: rotate(110deg); } 
+            50% { transform: rotate(-60deg); } 
+            100% { transform: rotate(0deg); } 
+        }
+
+        .hole { position: absolute; right: 200px; bottom: calc(50% - 10px); width: 50px; height: 100px; pointer-events: auto; }
+        .flag-pole { width: 3px; height: 80px; background: white; position: absolute; left: 23px; bottom: 0; }
+        
+        /* --- BETTER FLAG ANIMATION --- */
+        .flag {
+            width: 35px; height: 25px; background: red; position: absolute; left: 26px; bottom: 60px;
+            transform-origin: left center; 
+            animation: flagWaveComplex 1.2s ease-in-out infinite;
+        }
+        @keyframes flagWaveComplex {
+            0% { transform: skewY(0deg) scaleX(1) rotate(0deg); }
+            25% { transform: skewY(15deg) scaleX(0.9) rotate(3deg); }
+            50% { transform: skewY(0deg) scaleX(1.05) rotate(0deg); }
+            75% { transform: skewY(-15deg) scaleX(0.9) rotate(-3deg); }
+            100% { transform: skewY(0deg) scaleX(1) rotate(0deg); }
+        }
+        
+        .hole-circle { width: 25px; height: 8px; background: black; border-radius: 50%; position: absolute; left: 12px; bottom: -3px; transition: all 0.3s; }
+        .hole-circle.hit { animation: holePulse 0.5s ease-out; }
+        @keyframes holePulse {
+            0% { box-shadow: 0 0 0 rgba(255, 215, 0, 0.7); transform: scale(1); }
+            50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.9); transform: scale(1.3); }
+            100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); transform: scale(1); }
+        }
+        
+        .ball { position: absolute; width: 20px; height: 20px; background: white; border-radius: 50%; display: none; box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 100; will-change: transform, left, bottom; }
+        .hit-particle { position: absolute; width: 6px; height: 6px; background: gold; border-radius: 50%; pointer-events: none; z-index: 200; }
+        
+        .bottom-menu {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            width: 90%; height: auto; background: rgba(0,0,0,0.7);
+            padding: 20px 40px; z-index: 200;
+            border: 2px solid rgba(255,255,255,0.3); border-radius: 20px;
+            backdrop-filter: blur(5px); display: flex; flex-direction: column; gap: 15px;
+        }
+        
+        .stats { display: flex; justify-content: space-around; font-size: 24px; text-shadow: 0 2px 4px black; }
+        .stat-item { text-align: center; }
+        .stat-value { font-size: 32px; font-weight: bold; color: gold; margin-top: 5px; }
+        
+        .bet-controls { display: flex; justify-content: center; align-items: center; gap: 20px; }
+        .bet-btn { width: 50px; height: 50px; font-size: 24px; background: rgba(50,50,50,0.8); color: white; border: 2px solid #666; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+        .bet-btn:hover { background: #666; transform: scale(1.05); }
+        .bet-amount { font-size: 32px; min-width: 100px; text-align: center; text-shadow: 0 2px 4px black; }
+        
+        .balls-selector { display: flex; justify-content: center; gap: 10px; }
+        .ball-btn { width: 80px; height: 50px; font-size: 18px; background: rgba(60,60,60,0.8); color: white; border: 2px solid #666; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+        .ball-btn:hover { transform: scale(1.05); }
+        .ball-btn.active { background: gold; color: black; border-color: gold; font-weight: bold; }
+        
+        .place-bet-btn { width: 300px; height: 70px; font-size: 26px; background: rgba(0,128,0,0.9); color: white; border: none; cursor: pointer; border-radius: 12px; margin: 10px auto 0; display: block; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: 0.2s; }
+        .place-bet-btn:hover { background: #00aa00; transform: scale(1.02); }
+        .place-bet-btn:disabled { background: #333; cursor: not-allowed; transform: none; }
+        
+    </style>
+</head>
+<body>
+    <div id="game">
+        <div class="top-bar">
+            <div style="font-size: 24px; text-shadow: 0 2px 4px black;">Balance: $<span id="balance">1000</span></div>
+            <div style="font-size: 24px; text-shadow: 0 2px 4px black;">Zone <span id="current-zone">1</span></div>
+        </div>
+        
+        <div class="zone-selector">
+            <button class="zone-btn active" data-zone="1">Zone 1<br>Clean<br>-0%</button>
+            <button class="zone-btn" data-zone="2">Zone 2<br>Sand<br>-5%</button>
+            <button class="zone-btn" data-zone="3">Zone 3<br>Grass<br>-10%</button>
+            <button class="zone-btn" data-zone="4">Zone 4<br>Rocks<br>-15%</button>
+            <button class="zone-btn" data-zone="5">Zone 5<br>Trees<br>-20%</button>
+            <button class="zone-btn" data-zone="6">Zone 6<br>Mixed<br>-30%</button>
+        </div>
+        
+        <!-- NEW SKY LAYERS (Cross-fade) -->
+        <div id="sky-base" class="sky-layer"></div>
+        <div id="sky-overlay" class="sky-overlay"></div>
+        
+        <!-- Celestial Pivot System -->
+        <div class="celestial-pivot" id="celestial-pivot">
+            <div class="sun" id="sun"></div>
+            <div class="moon" id="moon"></div>
+        </div>
+        
+        <div id="stars-container"></div>
+        
+        <div class="cloud cloud-small" style="left: 200px; top: 200px; animation-duration: 180s;"></div>
+        <div class="cloud cloud-medium" style="left: 600px; top: 250px; animation-duration: 220s;"></div>
+        <div class="cloud cloud-large" style="left: 1100px; top: 180px; animation-duration: 200s;"></div>
+        <div class="cloud cloud-small" style="left: 1500px; top: 300px; animation-duration: 190s;"></div>
+        <div class="cloud cloud-medium" style="left: 100px; top: 350px; animation-duration: 210s;"></div>
+        
+        <!-- NEW GROUND LAYERS (Cross-fade) -->
+        <div id="ground-base" class="ground-layer-base"></div>
+        <div id="ground-overlay" class="ground-layer-overlay"></div>
+
+        <!-- Golf Cart (Static, Left) -->
+        <div class="golf-cart">
+            <div class="cart-roof"></div>
+            <div class="cart-pole-front"></div>
+            <div class="cart-pole-back"></div>
+            <div class="cart-seat"></div>
+            <div class="cart-body"></div>
+            <div class="cart-wheel-front"></div>
+            <div class="cart-wheel-back"></div>
+            <div class="cart-steering"></div>
+        </div>
+
+        <div class="obstacles" id="obstacles-container"></div>
+        
+        <div class="game-field">
+            <div class="golfer-container" id="golfer">
+                <div class="golfer-shadow"></div>
+                <div class="golfer-head"></div>
+                <div class="golfer-body"></div>
+                <!-- Club attached to left arm -->
+                <div class="golfer-arm left">
+                    <div class="golf-club"></div>
+                </div>
+                <div class="golfer-arm right"></div>
+                <div class="golfer-leg left"></div>
+                <div class="golfer-leg right"></div>
+            </div>
+            
+            <div class="hole">
+                <div class="flag-pole"></div>
+                <div class="flag"></div>
+                <div class="hole-circle"></div>
+            </div>
+        </div>
+        
+        <div class="bottom-menu">
+            <div class="stats">
+                <div class="stat-item">
+                    <div>WIN CHANCE</div>
+                    <div class="stat-value" id="win-chance">90%</div>
+                </div>
+                <div class="stat-item">
+                    <div>MULTIPLIER</div>
+                    <div class="stat-value" id="multiplier">x1.11</div>
+                </div>
+                <div class="stat-item">
+                    <div>DISTANCE</div>
+                    <div class="stat-value" id="distance">CLOSE</div>
+                </div>
+            </div>
+            
+            <div class="bet-controls">
+                <button class="bet-btn" id="bet-half">½</button>
+                <button class="bet-btn" id="bet-minus">-</button>
+                <div class="bet-amount">$<span id="bet-value">10</span></div>
+                <button class="bet-btn" id="bet-plus">+</button>
+                <button class="bet-btn" id="bet-double">2x</button>
+            </div>
+            
+            <div class="balls-selector">
+                <button class="ball-btn active" data-balls="1">1 Ball</button>
+                <button class="ball-btn" data-balls="3">3 Balls</button>
+                <button class="ball-btn" data-balls="5">5 Balls</button>
+                <button class="ball-btn" data-balls="10">10 Balls</button>
+            </div>
+            
+            <button class="place-bet-btn" id="place-bet">PLACE BET 🏌️</button>
+        </div>
+    </div>
+
+    <script>
+        const starsContainer = document.getElementById('stars-container');
+        for (let i = 0; i < 40; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 1920 + 'px';
+            star.style.top = Math.random() * 500 + 'px';
+            star.style.width = Math.random() * 3 + 1 + 'px';
+            star.style.height = star.style.width;
+            star.style.animationDelay = Math.random() * 3 + 's';
+            starsContainer.appendChild(star);
+        }
+
+        let currentZone = 1;
+        let betAmount = 10;
+        let selectedBalls = 1;
+        let balance = 1000;
+        let isDragging = false;
+        let isBetting = false;
+        
+        const golfer = document.getElementById('golfer');
+        const zoneBtns = document.querySelectorAll('.zone-btn');
+        const ballBtns = document.querySelectorAll('.ball-btn');
+        const placeBetBtn = document.getElementById('place-bet');
+        const pivot = document.getElementById('celestial-pivot');
+        const obstaclesContainer = document.getElementById('obstacles-container');
+        
+        const skyBase = document.getElementById('sky-base');
+        const skyOverlay = document.getElementById('sky-overlay');
+        const groundBase = document.getElementById('ground-base');
+        const groundOverlay = document.getElementById('ground-overlay');
+        
+        const leftArm = golfer.querySelector('.golfer-arm.left');
+        const rightArm = golfer.querySelector('.golfer-arm.right');
+        const leftLeg = golfer.querySelector('.golfer-leg.left');
+        const rightLeg = golfer.querySelector('.golfer-leg.right');
+        const head = golfer.querySelector('.golfer-head');
+        
+        const zonePenalties = { 1: 0, 2: 5, 3: 10, 4: 15, 5: 20, 6: 30 };
+        const OBSTACLE_POSITIONS = [450, 950, 1450];
+        
+        let skyTimeout = null;
+        let groundTimeout = null;
+
+        function transitionLayer(baseEl, overlayEl, newGradient, isSky) {
+            const timeoutId = isSky ? skyTimeout : groundTimeout;
+            if (timeoutId) clearTimeout(timeoutId);
+
+            overlayEl.style.background = newGradient;
+            void overlayEl.offsetWidth; 
+            overlayEl.style.opacity = '1';
+            
+            const newTimeout = setTimeout(() => {
+                baseEl.style.background = newGradient;
+                overlayEl.style.transition = 'none';
+                overlayEl.style.opacity = '0';
+                void overlayEl.offsetWidth;
+                overlayEl.style.transition = 'opacity 1.5s ease-in-out';
+                
+                if (isSky) skyTimeout = null;
+                else groundTimeout = null;
+            }, 1500);
+
+            if (isSky) skyTimeout = newTimeout;
+            else groundTimeout = newTimeout;
+        }
+
+        function updateObstacles(zone) {
+            obstaclesContainer.innerHTML = '';
+            if (zone === 1) return;
+            
+            setTimeout(() => obstaclesContainer.classList.add('active'), 50);
+            
+            OBSTACLE_POSITIONS.forEach((pos, index) => {
+                let type = '';
+                if (zone === 2) type = 'sand';
+                else if (zone === 3) type = 'grass';
+                else if (zone === 4) type = 'rock';
+                else if (zone === 5) type = 'tree';
+                else if (zone === 6) {
+                    if (index === 0) type = 'grass';
+                    else if (index === 1) type = 'rock';
+                    else type = 'tree';
+                }
+                
+                if (type) {
+                    let el = document.createElement('div');
+                    el.style.left = pos + 'px';
+                    
+                    if ((type === 'tree') && (zone === 5 || zone === 6)) {
+                        el.style.animation = 'popInLarge 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+                    } else {
+                        el.style.animation = 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+                    }
+                    el.style.animationDelay = (index * 0.1) + 's';
+                    
+                    if (type === 'sand') el.className = 'sand-dune';
+                    else if (type === 'grass') el.className = 'grass-tuft';
+                    else if (type === 'rock') el.className = 'rock';
+                    else if (type === 'tree') {
+                        el.className = 'tree';
+                        if (zone === 5 || zone === 6) el.classList.add('large');
+                        let crown = document.createElement('div'); crown.className = 'tree-crown';
+                        let trunk = document.createElement('div'); trunk.className = 'tree-trunk';
+                        el.appendChild(crown); el.appendChild(trunk);
+                    }
+                    obstaclesContainer.appendChild(el);
+                }
+            });
+            obstaclesContainer.classList.add('active');
+        }
+
+        zoneBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (isBetting) return;
+                zoneBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentZone = parseInt(btn.dataset.zone);
+                document.getElementById('current-zone').textContent = currentZone;
+                
+                const stars = document.querySelectorAll('.star');
+                stars.forEach(s => s.classList.remove('active'));
+                
+                let rotation = 0;
+                let skyGrad = '';
+                let groundGrad = '';
+                
+                // --- DEFINING VISIBLE TEXTURED BACKGROUNDS ---
+                
+                const grassPattern = `linear-gradient(to bottom, #556B2F 0%, #225522 100%)`;
+                const sandPattern = `linear-gradient(to bottom, #F4A460 0%, #8B4513 100%)`;
+                const darkGrassPattern = `linear-gradient(to bottom, #0f220f 0%, #000 100%)`;
+                const darkSandPattern = `linear-gradient(to bottom, #4B3621 0%, #1a1a1a 100%)`;
+                // NEW: Earthy/Rocky ground for Zone 4
+                const rockyPattern = `linear-gradient(to bottom, #5D4037 0%, #3E2723 100%)`;
+
+                if (currentZone === 1) {
+                    skyGrad = 'linear-gradient(to bottom, #FFB6C1 0%, #87CEEB 100%)';
+                    groundGrad = grassPattern;
+                    rotation = 48; 
+                    stars.forEach(s => s.classList.add('active'));
+                }
+                else if (currentZone === 2) {
+                    skyGrad = 'linear-gradient(to bottom, #4A90E2 0%, #87CEEB 100%)';
+                    groundGrad = sandPattern;
+                    rotation = 85;
+                }
+                else if (currentZone === 3) {
+                    skyGrad = 'linear-gradient(to bottom, #FF6B6B 0%, #FFD700 100%)';
+                    groundGrad = grassPattern;
+                    rotation = 110;
+                }
+                else if (currentZone === 4) {
+                    skyGrad = 'linear-gradient(to bottom, #8B4789 0%, #FF8C00 100%)';
+                    groundGrad = rockyPattern; // Updated to Brown/Rocky
+                    rotation = 132; 
+                }
+                else if (currentZone === 5) {
+                    skyGrad = 'linear-gradient(to bottom, #1a2332 0%, #FF8C00 100%)';
+                    groundGrad = darkGrassPattern;
+                    rotation = 200;
+                    stars.forEach(s => s.classList.add('active'));
+                }
+                else if (currentZone === 6) {
+                    skyGrad = 'linear-gradient(to bottom, #000814 0%, #1a2332 100%)';
+                    groundGrad = darkSandPattern;
+                    rotation = 270;
+                    stars.forEach(s => s.classList.add('active'));
+                }
+                
+                transitionLayer(skyBase, skyOverlay, skyGrad, true);
+                transitionLayer(groundBase, groundOverlay, groundGrad, false);
+                pivot.style.transform = `rotate(${rotation}deg)`;
+                updateObstacles(currentZone);
+                updateStats();
+            });
+        });
+        
+        // Physics
+        let startX, startGolferX, lastMouseX = 0;
+        let limbAngles = { head: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 };
+        let targetAngles = { head: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 };
+        let animationFrame;
+        
+        golfer.addEventListener('mousedown', (e) => {
+            if (isBetting) return;
+            isDragging = true; startX = e.clientX; lastMouseX = e.clientX;
+            startGolferX = golfer.offsetLeft;
+            golfer.classList.add('dragging', 'flying');
+            updateRagdoll();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = (e.clientX - startX) / getScale();
+            let newX = startGolferX + deltaX;
+            newX = Math.max(50, Math.min(newX, 1600));
+            golfer.style.left = newX + 'px';
+            const currentMouseX = e.clientX;
+            const velocity = (currentMouseX - lastMouseX) / getScale();
+            lastMouseX = currentMouseX;
+            const maxAngle = 80; const velocityFactor = Math.max(-1.5, Math.min(1.5, velocity / 4)); 
+            targetAngles.leftArm = velocityFactor * maxAngle;
+            targetAngles.rightArm = velocityFactor * maxAngle;
+            targetAngles.leftLeg = velocityFactor * (maxAngle * 0.8);
+            targetAngles.rightLeg = velocityFactor * (maxAngle * 0.8);
+            targetAngles.head = velocityFactor * (maxAngle * 0.3);
+            updateStats();
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) { isDragging = false; golfer.classList.remove('dragging', 'flying'); targetAngles = { head: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 }; }
+        });
+        
+        function updateRagdoll() {
+            if (!animationFrame) animationFrame = requestAnimationFrame(updateRagdollLoop);
+        }
+        
+        let lastRagdollUpdate = 0;
+        function updateRagdollLoop(timestamp) {
+            if (timestamp - lastRagdollUpdate < 16) { animationFrame = requestAnimationFrame(updateRagdollLoop); return; }
+            lastRagdollUpdate = timestamp;
+            const baseLerpSpeed = isDragging ? 0.7 : 0.5;
+            if (!golfer.classList.contains('swinging')) {
+                limbAngles.leftArm += (targetAngles.leftArm - limbAngles.leftArm) * (baseLerpSpeed * 1.0);
+                limbAngles.rightArm += (targetAngles.rightArm - limbAngles.rightArm) * (baseLerpSpeed * 0.7);
+            }
+            limbAngles.leftLeg += (targetAngles.leftLeg - limbAngles.leftLeg) * (baseLerpSpeed * 0.5);
+            limbAngles.rightLeg += (targetAngles.rightLeg - limbAngles.rightLeg) * (baseLerpSpeed * 0.3);
+            limbAngles.head += (targetAngles.head - limbAngles.head) * (baseLerpSpeed * 0.1);
+            
+            updateLimbs();
+            
+            if (isDragging) { animationFrame = requestAnimationFrame(updateRagdollLoop); } 
+            else {
+                let needsContinue = false;
+                for (let limb in limbAngles) { if (Math.abs(limbAngles[limb]) > 0.5) { needsContinue = true; break; } }
+                if (needsContinue) animationFrame = requestAnimationFrame(updateRagdollLoop);
+                else { 
+                    if (!golfer.classList.contains('swinging')) {
+                        for (let limb in limbAngles) limbAngles[limb] = 0; 
+                    }
+                    updateLimbs(); 
+                    animationFrame = null; 
+                }
+            }
+        }
+        
+        function updateLimbs() {
+            if (!golfer.classList.contains('swinging')) {
+                leftArm.style.transform = `rotate(${limbAngles.leftArm}deg)`;
+                rightArm.style.transform = `rotate(${limbAngles.rightArm}deg)`;
+            } else {
+                leftArm.style.transform = ''; 
+                rightArm.style.transform = '';
+            }
+            leftLeg.style.transform = `rotate(${limbAngles.leftLeg}deg)`;
+            rightLeg.style.transform = `rotate(${limbAngles.rightLeg}deg)`;
+            head.style.transform = `rotate(${limbAngles.head}deg)`;
+        }
+        
+        function updateStats() {
+            const golferX = golfer.offsetLeft; const holeX = 1920 - 200; const distance = holeX - golferX;
+            const maxDistance = 1550; const minDistance = 100;
+            const normalizedDist = Math.max(0, Math.min(1, (distance - minDistance) / (maxDistance - minDistance)));
+            const baseChance = 90 - (normalizedDist * 30);
+            const finalChance = Math.max(20, baseChance - zonePenalties[currentZone]);
+            const multiplier = (100 / finalChance).toFixed(2);
+            let distLabel = 'CLOSE';
+            if (normalizedDist > 0.66) distLabel = 'VERY FAR';
+            else if (normalizedDist > 0.33) distLabel = 'FAR';
+            else if (normalizedDist > 0.15) distLabel = 'MEDIUM';
+            document.getElementById('win-chance').textContent = Math.round(finalChance) + '%';
+            document.getElementById('multiplier').textContent = 'x' + multiplier;
+            document.getElementById('distance').textContent = distLabel;
+        }
+        
+        document.getElementById('bet-half').addEventListener('click', () => { betAmount = Math.max(1, Math.floor(betAmount / 2)); document.getElementById('bet-value').textContent = betAmount; });
+        document.getElementById('bet-minus').addEventListener('click', () => { betAmount = Math.max(1, betAmount - 10); document.getElementById('bet-value').textContent = betAmount; });
+        document.getElementById('bet-plus').addEventListener('click', () => { betAmount = Math.min(balance, betAmount + 10); document.getElementById('bet-value').textContent = betAmount; });
+        document.getElementById('bet-double').addEventListener('click', () => { betAmount = Math.min(balance, betAmount * 2); document.getElementById('bet-value').textContent = betAmount; });
+        ballBtns.forEach(btn => { btn.addEventListener('click', () => { if (isBetting) return; ballBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active'); selectedBalls = parseInt(btn.dataset.balls); }); });
+        
+        placeBetBtn.addEventListener('click', async () => {
+            if (isBetting || balance < betAmount * selectedBalls) return;
+            isBetting = true; placeBetBtn.disabled = true;
+            const winChance = parseInt(document.getElementById('win-chance').textContent);
+            const results = []; for (let i = 0; i < selectedBalls; i++) results.push((Math.random() * 100) < winChance);
+            
+            for (let i = 0; i < selectedBalls; i++) { 
+                golfer.classList.add('swinging');
+                await new Promise(r => setTimeout(r, 200));
+                shootBall(results[i]); 
+                await new Promise(r => setTimeout(r, 200));
+                golfer.classList.remove('swinging');
+                if (i < selectedBalls - 1) await new Promise(r => setTimeout(r, 100));
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            isBetting = false; placeBetBtn.disabled = false;
+        });
+        
+        function shootBall(isWin) {
+            const multiplier = parseFloat(document.getElementById('multiplier').textContent.substring(1));
+            balance -= betAmount; document.getElementById('balance').textContent = balance;
+            const ball = document.createElement('div'); ball.className = 'ball'; ball.style.display = 'block';
+            document.querySelector('.game-field').appendChild(ball);
+            const horizonY = 1080 * 0.5; const startX = golfer.offsetLeft + 25; const startY = horizonY - 10 + 40; 
+            const holeX = 1734.5 - 50; const holeY = horizonY - 10;
+            let endX, endY;
+            if (isWin) { endX = holeX; endY = holeY; } 
+            else {
+                const missType = Math.random();
+                if (missType < 0.5) endX = holeX - (Math.random() * 300 + 100);
+                else endX = holeX + (Math.random() * 200 + 50);
+                endY = holeY;
+            }
+            const distance = endX - startX; const duration = 750; const startTime = Date.now(); let animFrame;
+            function animate() {
+                const elapsed = Date.now() - startTime; const progress = Math.min(elapsed / duration, 1);
+                const x = startX + (distance * progress); const heightFactor = Math.sin(progress * Math.PI); const maxHeight = 100;
+                const y = startY + (heightFactor * maxHeight) - (progress * 40);
+                ball.style.left = x + 'px'; ball.style.bottom = y + 'px';
+                const scale = 0.8 + (heightFactor * 0.4); ball.style.transform = `scale(${scale})`;
+                if (progress < 1) { animFrame = requestAnimationFrame(animate); } 
+                else {
+                    if (isWin) {
+                        const winAmount = Math.round(betAmount * multiplier); balance += winAmount;
+                        document.getElementById('balance').textContent = balance;
+                        const holeCircle = document.querySelector('.hole-circle');
+                        const holeContainer = document.querySelector('.hole');
+                        holeCircle.classList.add('hit'); setTimeout(() => holeCircle.classList.remove('hit'), 500);
+                        for (let i = 0; i < 8; i++) {
+                            const particle = document.createElement('div'); particle.className = 'hit-particle';
+                            particle.style.left = '25px'; particle.style.bottom = '0px'; particle.style.position = 'absolute';
+                            holeContainer.appendChild(particle);
+                            const angle = (Math.PI * 2 * i) / 8; const d = 30;
+                            const tx = 25 + Math.cos(angle) * d; const ty = Math.sin(angle) * d;
+                            particle.animate([{ left: '25px', bottom: '0px', opacity: 1 }, { left: tx + 'px', bottom: ty + 'px', opacity: 0 }], { duration: 400, easing: 'ease-out' });
+                            setTimeout(() => particle.remove(), 400);
+                        }
+                        ball.style.background = 'gold'; ball.style.boxShadow = '0 0 30px gold';
+                        ball.style.transition = 'transform 0.3s, opacity 0.3s'; ball.style.transform = 'scale(0.1)'; ball.style.opacity = '0';
+                    } else {
+                        ball.style.background = '#ff4444'; ball.style.boxShadow = '0 0 10px #ff4444';
+                        setTimeout(() => { ball.style.transition = 'opacity 0.3s'; ball.style.opacity = '0'; }, 100);
+                    }
+                    setTimeout(() => { if (animFrame) cancelAnimationFrame(animFrame); ball.remove(); }, 500);
+                }
+            }
+            animate();
+        }
+        
+        function getScale() {
+            const game = document.getElementById('game'); const transform = window.getComputedStyle(game).transform;
+            if (transform === 'none') return 1;
+            const matrix = transform.match(/matrix\(([^)]+)\)/);
+            if (!matrix) return 1; return parseFloat(matrix[1].split(',')[0]);
+        }
+        function scaleGame() {
+            const game = document.getElementById('game'); const scaleX = window.innerWidth / 1920; const scaleY = window.innerHeight / 1080;
+            const scale = Math.min(scaleX, scaleY); game.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', scaleGame); scaleGame();
+        
+        // Initial setup - Clean
+        const grassPattern = `linear-gradient(to bottom, #556B2F 0%, #225522 100%)`;
+        
+        skyBase.style.background = 'linear-gradient(to bottom, #FFB6C1 0%, #87CEEB 100%)';
+        groundBase.style.background = grassPattern;
+        pivot.style.transform = 'rotate(48deg)';
+        updateObstacles(1);
+        document.querySelectorAll('.star').forEach(s => s.classList.add('active'));
+        
+    </script>
+</body>
+</html>
