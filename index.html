@@ -3,215 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquid Glass Hub</title>
+    <title>Games Demo</title>
     <style>
         :root {
-            --done-color: #00ffbd;
-            --beta-color: #ffde59;
-            --bg-dark: #030508;
-            --glass-core: rgba(255, 255, 255, 0.02);
+            --accent-done: #00ffbd;
+            --accent-beta: #ffde59;
+            --bg: #020406;
         }
 
         body {
-            background: var(--bg-dark);
+            background: var(--bg);
             color: #fff;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             margin: 0;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 80px 20px;
-            overflow-x: hidden;
-            /* Плавний фоновий градієнт */
-            background: linear-gradient(135deg, #030508 0%, #080c14 100%);
+            padding: 50px 20px;
+            overflow: hidden;
         }
 
-        /* Динамічний ліхтарик з інерцією */
-        .cursor-glow {
+        /* Живий градієнт на фоні */
+        .liquid-bg {
             position: fixed;
-            top: 0; left: 0;
-            width: 600px; height: 600px;
-            background: radial-gradient(circle, rgba(88, 166, 255, 0.12) 0%, transparent 70%);
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -2;
+            background: linear-gradient(45deg, #020406, #050a15, #020406);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Ліхтарик з інпут-лагом */
+        .cursor-follow {
+            position: fixed;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(88, 166, 255, 0.08) 0%, transparent 70%);
             border-radius: 50%;
             pointer-events: none;
             z-index: -1;
-            transform: translate(-50%, -50%);
-            transition: transform 0.15s cubic-bezier(0.23, 1, 0.32, 1);
-            filter: blur(40px);
-        }
-
-        /* Анімований живий фон */
-        .liquid-blob {
-            position: fixed;
-            width: 100vw; height: 100vh;
-            top: 0; left: 0;
-            z-index: -2;
-            background: 
-                radial-gradient(at 0% 0%, rgba(46, 160, 67, 0.05) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(188, 140, 255, 0.05) 0px, transparent 50%);
-            animation: drift 20s infinite alternate ease-in-out;
-        }
-
-        @keyframes drift {
-            from { transform: scale(1); filter: hue-rotate(0deg); }
-            to { transform: scale(1.1); filter: hue-rotate(45deg); }
+            /* Плавність руху (Input Lag) */
+            transition: transform 0.3s cubic-bezier(0.1, 0.1, 0.1, 1);
+            will-change: transform;
         }
 
         h1 {
-            font-size: 4rem;
+            font-size: 3.5rem;
             font-weight: 900;
-            letter-spacing: -3px;
+            letter-spacing: -2px;
             margin: 0;
-            background: linear-gradient(to bottom, #fff, rgba(255,255,255,0.3));
+            background: linear-gradient(#fff, #888);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            animation: reveal 1.5s cubic-bezier(0.19, 1, 0.22, 1);
         }
 
         .container {
             display: flex;
-            gap: 40px;
-            margin-top: 60px;
+            gap: 20px;
+            margin-top: 40px;
             width: 100%;
-            max-width: 1000px;
+            max-width: 900px;
+            flex-wrap: wrap;
         }
 
-        .glass-panel {
+        .panel {
             flex: 1;
-            background: var(--glass-core);
-            backdrop-filter: blur(30px) saturate(150%);
-            -webkit-backdrop-filter: blur(30px) saturate(150%);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 40px;
-            padding: 40px;
-            box-shadow: 0 40px 100px rgba(0,0,0,0.6);
-            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-            animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-
-        .glass-panel:hover {
-            background: rgba(255, 255, 255, 0.04);
-            border-color: rgba(255, 255, 255, 0.12);
-            transform: translateY(-10px) scale(1.01);
+            min-width: 300px;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 25px;
+            transition: 0.3s ease;
         }
 
         .label {
-            font-size: 0.8rem;
-            font-weight: 900;
+            font-size: 0.7rem;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 4px;
-            margin-bottom: 30px;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
         }
 
-        .done .label { color: var(--done-color); opacity: 0.8; }
-        .beta .label { color: var(--beta-color); opacity: 0.8; }
+        .done .label { color: var(--accent-done); }
+        .beta .label { color: var(--accent-beta); }
 
-        /* Тягучі картки */
-        .game-card {
+        .card {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(255, 255, 255, 0.02);
-            padding: 22px 28px;
-            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 16px 20px;
+            border-radius: 16px;
             color: #fff;
             text-decoration: none;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            transition: 0.2s ease;
             border: 1px solid transparent;
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        .game-card:hover {
-            background: rgba(255, 255, 255, 0.08);
-            transform: translateX(12px);
+        .card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            transform: translateX(5px);
             border-color: rgba(255, 255, 255, 0.1);
         }
 
-        .game-card b { font-size: 1.2rem; letter-spacing: -0.5px; font-weight: 600; }
-        
-        .status-tag {
-            font-size: 0.7rem;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: rgba(255,255,255,0.05);
-            opacity: 0.5;
-            transition: 0.3s;
-        }
-
-        .game-card:hover .status-tag { opacity: 1; background: rgba(255,255,255,0.15); }
-
-        @keyframes reveal {
-            from { opacity: 0; transform: translateY(30px) rotateX(-10deg); filter: blur(20px); }
-            to { opacity: 1; transform: translateY(0); filter: blur(0); }
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(50px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .card b { font-size: 1rem; }
+        .card i { font-style: normal; opacity: 0.3; font-size: 0.8rem; }
     </style>
 </head>
 <body>
 
-    <div class="liquid-blob"></div>
-    <div class="cursor-glow" id="cursor"></div>
+    <div class="liquid-bg"></div>
+    <div class="cursor-follow" id="flashlight"></div>
 
-    <h1>LABORATORY</h1>
-    <p style="opacity: 0.3; font-weight: 600; letter-spacing: 2px;">SECURE ACCESS ONLY</p>
+    <h1>GAMES DEMO</h1>
+    <p style="opacity: 0.2; font-size: 0.8rem; letter-spacing: 1px;">INTERNAL REPOSITORY</p>
 
     <div class="container">
-        <div class="glass-panel done" style="animation-delay: 0.2s;">
-            <div class="label">Stable Builds</div>
+        <div class="panel done">
+            <div class="label">● Stable</div>
             <div id="done-list"></div>
         </div>
-
-        <div class="glass-panel beta" style="animation-delay: 0.4s;">
-            <div class="label">Unstable Experiments</div>
+        <div class="panel beta">
+            <div class="label">● Beta</div>
             <div id="beta-list"></div>
         </div>
     </div>
 
     <script>
-        const USER = 'kivsjak';         
-        const REPO = 'srhiiy-efimtsev'; 
-        const cursor = document.getElementById('cursor');
-
-        // Розумний ліхтарик
+        const flashlight = document.getElementById('flashlight');
+        
+        // Рух ліхтарика (Input Lag через CSS transition)
         document.addEventListener('mousemove', e => {
-            cursor.style.left = e.clientX + 'px';
-            cursor.style.top = e.clientY + 'px';
+            const x = e.clientX - 250;
+            const y = e.clientY - 250;
+            flashlight.style.transform = `translate(${x}px, ${y}px)`;
         });
 
-        async function init() {
+        async function load() {
             try {
-                const res = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/`);
+                const res = await fetch(`https://api.github.com/repos/kivsjak/srhiiy-efimtsev/contents/?t=${Date.now()}`);
                 const files = await res.json();
                 
                 const dList = document.getElementById('done-list');
                 const bList = document.getElementById('beta-list');
 
-                files.forEach((f, i) => {
+                files.forEach(f => {
                     const n = f.name.toUpperCase();
                     if (n.endsWith('.HTML') && n !== 'INDEX.HTML') {
                         const target = n.includes('DONE') ? dList : (n.includes('BETA') ? bList : null);
                         if (target) {
-                            const card = document.createElement('a');
-                            card.className = 'game-card';
-                            card.href = f.name;
-                            card.target = '_blank';
-                            card.style.animation = `reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) both ${0.5 + (i*0.1)}s`;
-                            card.innerHTML = `<b>${f.name.split('.')[0]}</b><div class="status-tag">LCH →</div>`;
-                            target.appendChild(card);
+                            const a = document.createElement('a');
+                            a.className = 'card';
+                            a.href = f.name;
+                            a.target = '_blank';
+                            a.innerHTML = `<b>${f.name.split('.')[0]}</b><i>PLAY →</i>`;
+                            target.appendChild(a);
                         }
                     }
                 });
-            } catch (e) { console.log('API Error'); }
+            } catch (e) { console.error('Error'); }
         }
-        init();
+        load();
     </script>
 </body>
 </html>
