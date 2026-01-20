@@ -6,182 +6,184 @@
     <title>Liquid Glass Hub</title>
     <style>
         :root {
-            --done-color: #00ff88;
-            --beta-color: #ffcc00;
-            --glass: rgba(255, 255, 255, 0.03);
-            --border: rgba(255, 255, 255, 0.08);
+            --done-color: #00ffbd;
+            --beta-color: #ffde59;
+            --bg-dark: #030508;
+            --glass-core: rgba(255, 255, 255, 0.02);
         }
 
         body {
-            background: #020408;
+            background: var(--bg-dark);
             color: #fff;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', sans-serif;
             margin: 0;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 60px 20px;
+            padding: 80px 20px;
             overflow-x: hidden;
+            /* Плавний фоновий градієнт */
+            background: linear-gradient(135deg, #030508 0%, #080c14 100%);
         }
 
-        /* Динамічний фон */
-        .liquid-bg {
+        /* Динамічний ліхтарик з інерцією */
+        .cursor-glow {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0; left: 0;
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(88, 166, 255, 0.12) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
             z-index: -1;
-            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(88, 166, 255, 0.15) 0%, transparent 50%);
-            transition: background 0.2s ease;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+            filter: blur(40px);
+        }
+
+        /* Анімований живий фон */
+        .liquid-blob {
+            position: fixed;
+            width: 100vw; height: 100vh;
+            top: 0; left: 0;
+            z-index: -2;
+            background: 
+                radial-gradient(at 0% 0%, rgba(46, 160, 67, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(188, 140, 255, 0.05) 0px, transparent 50%);
+            animation: drift 20s infinite alternate ease-in-out;
+        }
+
+        @keyframes drift {
+            from { transform: scale(1); filter: hue-rotate(0deg); }
+            to { transform: scale(1.1); filter: hue-rotate(45deg); }
         }
 
         h1 {
-            font-size: clamp(2rem, 8vw, 4rem);
+            font-size: 4rem;
             font-weight: 900;
-            letter-spacing: -2px;
+            letter-spacing: -3px;
             margin: 0;
-            background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.4) 100%);
+            background: linear-gradient(to bottom, #fff, rgba(255,255,255,0.3));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            animation: heroReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: reveal 1.5s cubic-bezier(0.19, 1, 0.22, 1);
         }
 
         .container {
             display: flex;
-            gap: 30px;
-            margin-top: 50px;
+            gap: 40px;
+            margin-top: 60px;
             width: 100%;
-            max-width: 900px;
-            perspective: 1000px;
+            max-width: 1000px;
         }
 
         .glass-panel {
             flex: 1;
-            background: var(--glass);
-            backdrop-filter: blur(25px) saturate(180%);
-            -webkit-backdrop-filter: blur(25px) saturate(180%);
-            border: 1px solid var(--border);
-            border-radius: 32px;
-            padding: 30px;
-            min-height: 400px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: panelEnter 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+            background: var(--glass-core);
+            backdrop-filter: blur(30px) saturate(150%);
+            -webkit-backdrop-filter: blur(30px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 40px;
+            padding: 40px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) both;
         }
 
         .glass-panel:hover {
-            transform: scale(1.02) rotateX(2deg);
-            border-color: rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.12);
+            transform: translateY(-10px) scale(1.01);
         }
 
         .label {
-            font-size: 0.75rem;
-            font-weight: 800;
+            font-size: 0.8rem;
+            font-weight: 900;
             text-transform: uppercase;
-            letter-spacing: 3px;
-            margin-bottom: 25px;
+            letter-spacing: 4px;
+            margin-bottom: 30px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
-        .done .label { color: var(--done-color); }
-        .beta .label { color: var(--beta-color); }
+        .done .label { color: var(--done-color); opacity: 0.8; }
+        .beta .label { color: var(--beta-color); opacity: 0.8; }
 
-        .label::before {
-            content: '';
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            box-shadow: 0 0 15px currentColor;
-        }
-
-        /* Тягуча кнопка */
+        /* Тягучі картки */
         .game-card {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid transparent;
-            padding: 20px 24px;
-            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 22px 28px;
+            border-radius: 24px;
             color: #fff;
             text-decoration: none;
-            margin-bottom: 12px;
-            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
+            margin-bottom: 15px;
+            border: 1px solid transparent;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .game-card:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateX(8px) scale(1.02);
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(12px);
             border-color: rgba(255, 255, 255, 0.1);
         }
 
-        .game-card b { font-size: 1.1rem; letter-spacing: -0.5px; }
+        .game-card b { font-size: 1.2rem; letter-spacing: -0.5px; font-weight: 600; }
         
-        .arrow {
-            width: 32px; height: 32px;
+        .status-tag {
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 20px;
             background: rgba(255,255,255,0.05);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
+            opacity: 0.5;
             transition: 0.3s;
         }
 
-        .game-card:hover .arrow {
-            background: #fff;
-            color: #000;
-            transform: rotate(-45deg);
+        .game-card:hover .status-tag { opacity: 1; background: rgba(255,255,255,0.15); }
+
+        @keyframes reveal {
+            from { opacity: 0; transform: translateY(30px) rotateX(-10deg); filter: blur(20px); }
+            to { opacity: 1; transform: translateY(0); filter: blur(0); }
         }
 
-        /* Анімації */
-        @keyframes heroReveal {
-            from { opacity: 0; transform: translateY(40px) scale(0.95); filter: blur(10px); }
-            to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-        }
-
-        @keyframes panelEnter {
-            from { opacity: 0; transform: translateY(60px); }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(50px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loader { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 40px auto; }
     </style>
 </head>
 <body>
 
-    <div class="liquid-bg"></div>
+    <div class="liquid-blob"></div>
+    <div class="cursor-glow" id="cursor"></div>
 
-    <h1>GAME LAB</h1>
-    <p style="opacity: 0.4; font-weight: 500;">Experimental Mechanics Hub</p>
+    <h1>LABORATORY</h1>
+    <p style="opacity: 0.3; font-weight: 600; letter-spacing: 2px;">SECURE ACCESS ONLY</p>
 
     <div class="container">
         <div class="glass-panel done" style="animation-delay: 0.2s;">
-            <div class="label">Production</div>
-            <div id="done-list"><div class="loader"></div></div>
+            <div class="label">Stable Builds</div>
+            <div id="done-list"></div>
         </div>
 
-        <div class="glass-panel beta" style="animation-delay: 0.3s;">
-            <div class="label">Testing</div>
-            <div id="beta-list"><div class="loader"></div></div>
+        <div class="glass-panel beta" style="animation-delay: 0.4s;">
+            <div class="label">Unstable Experiments</div>
+            <div id="beta-list"></div>
         </div>
     </div>
 
     <script>
         const USER = 'kivsjak';         
         const REPO = 'srhiiy-efimtsev'; 
+        const cursor = document.getElementById('cursor');
 
-        // Ефект світіння за курсором
+        // Розумний ліхтарик
         document.addEventListener('mousemove', e => {
-            const x = (e.clientX / window.innerWidth) * 100;
-            const y = (e.clientY / window.innerHeight) * 100;
-            document.body.style.setProperty('--x', x + '%');
-            document.body.style.setProperty('--y', y + '%');
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
         });
 
         async function init() {
@@ -191,7 +193,6 @@
                 
                 const dList = document.getElementById('done-list');
                 const bList = document.getElementById('beta-list');
-                dList.innerHTML = bList.innerHTML = '';
 
                 files.forEach((f, i) => {
                     const n = f.name.toUpperCase();
@@ -202,17 +203,13 @@
                             card.className = 'game-card';
                             card.href = f.name;
                             card.target = '_blank';
-                            card.style.animation = `heroReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both ${0.4 + (i*0.1)}s`;
-                            card.innerHTML = `<b>${f.name.replace(/\.[^/.]+$/, "")}</b><div class="arrow">→</div>`;
+                            card.style.animation = `reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) both ${0.5 + (i*0.1)}s`;
+                            card.innerHTML = `<b>${f.name.split('.')[0]}</b><div class="status-tag">LCH →</div>`;
                             target.appendChild(card);
                         }
                     }
                 });
-
-                if(!dList.children.length) dList.innerHTML = '<div style="opacity:0.2; text-align:center;">No files</div>';
-                if(!bList.children.length) bList.innerHTML = '<div style="opacity:0.2; text-align:center;">No files</div>';
-
-            } catch (e) { console.error('API Error'); }
+            } catch (e) { console.log('API Error'); }
         }
         init();
     </script>
