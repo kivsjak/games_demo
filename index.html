@@ -146,11 +146,10 @@
             const url = `https://api.github.com/repos/${USER}/${REPO}/contents?v=${Date.now()}`;
             
             try {
-                // Робимо простий запит без складних заголовків
+                // Робимо простий запит
                 const response = await fetch(url);
                 
                 if (!response.ok) {
-                    // Якщо помилка, кидаємо її, щоб показати на екрані
                     throw new Error(`GitHub Access Error: ${response.status}`);
                 }
 
@@ -178,6 +177,11 @@
                             const link = document.createElement('a');
                             link.className = 'game-card';
                             link.href = name; 
+                            
+                            // !!! ВІДКРИВАТИ В НОВІЙ ВКЛАДЦІ !!!
+                            link.target = '_blank';
+                            link.rel = 'noopener noreferrer';
+
                             // Прибираємо розширення .html з назви
                             link.innerHTML = `<b>${name.replace(/\.html$/i, '')}</b><i>PLAY →</i>`;
                             
@@ -200,10 +204,7 @@
                     <div class="error-log">
                         ⚠️ <b>ERROR:</b> ${err.message}<br><br>
                         <b>Possible fix:</b><br>
-                        1. Go to Repo Settings > General.<br>
-                        2. Scroll to bottom.<br>
-                        3. Make sure repository is <b>PUBLIC</b>.<br>
-                        (Private repos cannot be read by this script)
+                        Make sure repository is <b>PUBLIC</b>.
                     </div>`;
                 
                 bList.innerHTML = msg;
