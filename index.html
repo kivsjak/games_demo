@@ -72,7 +72,6 @@
             transition: all 0.4s ease; cursor: pointer;
         }
         
-        /* Стилізація карток під колонки */
         .panel-testing .game-card { border-color: rgba(255, 145, 0, 0.1); }
         .panel-testing .game-card:hover { border-color: rgba(255, 145, 0, 0.5); background: rgba(255, 145, 0, 0.05); }
         
@@ -84,11 +83,11 @@
         .game-card i { font-style: normal; font-size: 0.7rem; font-weight: 800; color: #fff; opacity: 0.5; }
 
         .status-msg {
-            color: #888; font-size: 0.8rem; text-align: center; padding: 20px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 10px;
+            color: #888; font-size: 0.8rem; text-align: center; padding: 20px;
         }
         .error-log {
-            color: #ff4d4d; font-family: monospace; font-size: 0.75rem; 
-            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-top: 10px; word-break: break-all;
+            color: #ff4d4d; font-family: monospace; font-size: 0.8rem; 
+            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; margin-top: 10px; word-break: break-word;
         }
 
         @media (min-width: 601px) {
@@ -112,14 +111,14 @@
             <div class="panel panel-testing">
                 <div class="label">● Testing (Beta)</div>
                 <div id="beta-list">
-                    <div class="status-msg">Searching...</div>
+                    <div class="status-msg">Loading...</div>
                 </div>
             </div>
             
             <div class="panel panel-stable">
                 <div class="label">● Stable (Done)</div>
                 <div id="done-list">
-                    <div class="status-msg">Searching...</div>
+                    <div class="status-msg">Loading...</div>
                 </div>
             </div>
         </div>
@@ -128,9 +127,8 @@
     <script>
         const USER = 'kivsjak';
         const REPO = 'games_demo';
-        const BRANCH = 'main'; // Явно вказуємо гілку, щоб не гадати
-
-        // Оновлюємо мишу
+        
+        // Анімація миші
         document.addEventListener('mousemove', e => {
             if(window.innerWidth > 600) {
                 const x = (e.clientX / window.innerWidth) * 100;
@@ -144,86 +142,72 @@
             const bList = document.getElementById('beta-list');
             const dList = document.getElementById('done-list');
             
-            // 1. Формуємо URL. Додаємо timestamp щоб обійти кеш
-            // Ми прибрали зайві слеші і додали ref=main
-            const url = `https://api.github.com/repos/${USER}/${REPO}/contents?ref=${BRANCH}&v=${Date.now()}`;
+            // Формуємо посилання на API
+            const url = `https://api.github.com/repos/${USER}/${REPO}/contents?v=${Date.now()}`;
             
             try {
-                // 2. Робимо "чистий" запит без headers, щоб не злити CORS
-                console.log("Fetching:", url);
+                // Робимо простий запит без складних заголовків
                 const response = await fetch(url);
                 
-                // 3. Обробка помилок HTTP
                 if (!response.ok) {
-                    throw new Error(`GitHub Error: ${response.status} ${response.statusText}`);
+                    // Якщо помилка, кидаємо її, щоб показати на екрані
+                    throw new Error(`GitHub Access Error: ${response.status}`);
                 }
 
                 const files = await response.json();
                 
-                // 4. Перевірка чи це масив
-                if (!Array.isArray(files)) {
-                    throw new Error("GitHub API returned weird data (not a list).");
-                }
-
-                // Очищаємо "Searching..."
                 bList.innerHTML = '';
                 dList.innerHTML = '';
+                let found = 0;
 
-                let count = 0;
-
-                // 5. Сортування
-                files.forEach(file => {
+                files.forEach((file, index) => {
                     const name = file.name;
                     const upName = name.toUpperCase();
 
-                    // Логіка: HTML файл, не index, не 404
+                    // Шукаємо HTML файли (ігноруємо index.html)
                     if (upName.endsWith('.HTML') && upName !== 'INDEX.HTML' && upName !== '404.HTML') {
                         
-                        let container = null;
+                        let target = null;
+                        
+                        // Логіка сортування
+                        if (upName.includes('BETA')) target = bList;
+                        else if (upName.includes('DONE')) target = dList;
 
-                        if (upName.includes('BETA')) {
-                            container = bList;
-                        } else if (upName.includes('DONE')) {
-                            container = dList;
-                        }
-
-                        if (container) {
-                            count++;
+                        if (target) {
+                            found++;
                             const link = document.createElement('a');
                             link.className = 'game-card';
                             link.href = name; 
-                            // Забираємо .html для краси
+                            // Прибираємо розширення .html з назви
                             link.innerHTML = `<b>${name.replace(/\.html$/i, '')}</b><i>PLAY →</i>`;
                             
-                            container.appendChild(link);
+                            target.appendChild(link);
                             
-                            // Плавна поява
-                            setTimeout(() => link.classList.add('visible'), 50 * count);
+                            // Анімація появи
+                            setTimeout(() => link.classList.add('visible'), index * 100);
                         }
                     }
                 });
 
-                // Якщо нічого не знайшли
-                if (count === 0) {
-                    const emptyMsg = '<div class="status-msg">Files found, but none match "BETA" or "DONE"</div>';
-                    if (bList.innerHTML === '') bList.innerHTML = emptyMsg;
-                    if (dList.innerHTML === '') dList.innerHTML = emptyMsg;
+                if (found === 0) {
+                    bList.innerHTML = '<div class="status-msg">No BETA/DONE files found</div>';
+                    dList.innerHTML = '<div class="status-msg">No BETA/DONE files found</div>';
                 }
 
             } catch (err) {
-                // ВІДОБРАЖЕННЯ ПОМИЛКИ ПРЯМО НА ЕКРАНІ
-                const errorHTML = `
+                console.error(err);
+                const msg = `
                     <div class="error-log">
-                        ⚠️ <b>SYSTEM FAILURE</b><br>
-                        ${err.message}<br><br>
-                        Check: <br>
-                        1. Is repo "${REPO}" <b>Public</b>?<br>
-                        2. Are files in "${BRANCH}" branch?
+                        ⚠️ <b>ERROR:</b> ${err.message}<br><br>
+                        <b>Possible fix:</b><br>
+                        1. Go to Repo Settings > General.<br>
+                        2. Scroll to bottom.<br>
+                        3. Make sure repository is <b>PUBLIC</b>.<br>
+                        (Private repos cannot be read by this script)
                     </div>`;
                 
-                bList.innerHTML = errorHTML;
-                dList.innerHTML = errorHTML;
-                console.error(err);
+                bList.innerHTML = msg;
+                dList.innerHTML = msg;
             }
         }
 
