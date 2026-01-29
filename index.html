@@ -509,13 +509,6 @@
             document.body.style.setProperty('--mouse-y', '50%');
         }
 
-        // ТЕСТОВІ ДАНІ для preview - реальні назви з репозиторія
-        const testFiles = [
-            { name: 'Tiki-Taka-Goal-DONE.html' },
-            { name: 'Football-Sim-BETA.html' },
-            { name: 'Some-Game-DONE.html' }
-        ];
-
         async function load() {
             try {
                 // Додаємо timestamp до запиту для запобігання кешуванню
@@ -526,38 +519,58 @@
                     }
                 });
                 
-                if (!res.ok) throw new Error('Failed to fetch');
+                if (!res.ok) {
+                    console.error('GitHub API error:', res.status, res.statusText);
+                    return;
+                }
                 
                 const files = await res.json();
                 renderGames(files);
             } catch(e) {
-                console.log('Using test data for preview');
-                renderGames(testFiles);
+                console.error('Failed to load files:', e);
             }
         }
 
         function renderGames(files) {
-            const dList = document.getElementById('done-list');
-            const bList = document.getElementById('beta-list');
+            const doneList = document.getElementById('done-list');
+            const betaList = document.getElementById('beta-list');
 
-            if (!dList || !bList) return;
+            if (!doneList || !betaList) return;
 
-            files.forEach((f, i) => {
-                const n = f.name.toUpperCase();
-                if (n.endsWith('.HTML') && n !== 'INDEX.HTML') {
-                    const target = n.includes('DONE') ? dList : (n.includes('BETA') ? bList : null);
-                    if (target) {
-                        const a = document.createElement('a');
-                        a.className = 'game-card';
-                        a.href = f.name;
-                        a.target = '_blank';
-                        a.rel = 'noopener noreferrer';
-                        a.innerHTML = `<b>${f.name.split('.')[0]}</b><i>RUN →</i>`;
+            let cardIndex = 0;
+
+            files.forEach((file) => {
+                // Перевіряємо чи це HTML файл (не index.html)
+                const fileName = file.name;
+                const fileNameUpper = fileName.toUpperCase();
+                
+                if (fileNameUpper.endsWith('.HTML') && fileNameUpper !== 'INDEX.HTML') {
+                    // Визначаємо категорію по назві файлу
+                    let targetList = null;
+                    
+                    if (fileNameUpper.includes('DONE')) {
+                        targetList = doneList; // Stable (зелена колонка)
+                    } else if (fileNameUpper.includes('BETA')) {
+                        targetList = betaList; // Testing (помаранчева колонка)
+                    }
+                    
+                    // Якщо файл підходить під категорію - додаємо його
+                    if (targetList) {
+                        const card = document.createElement('a');
+                        card.className = 'game-card';
+                        card.href = fileName;
+                        card.target = '_blank';
+                        card.rel = 'noopener noreferrer';
                         
-                        target.appendChild(a);
+                        // Показуємо назву без розширення
+                        const displayName = fileName.replace('.html', '').replace('.HTML', '');
+                        card.innerHTML = `<b>${displayName}</b><i>RUN →</i>`;
+                        
+                        targetList.appendChild(card);
 
                         // Анімація появи з затримкою
-                        setTimeout(() => a.classList.add('animate'), 500 + (i * 120));
+                        setTimeout(() => card.classList.add('animate'), 500 + (cardIndex * 120));
+                        cardIndex++;
                     }
                 }
             });
