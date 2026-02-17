@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Galactic Invasion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --ui-bg: #1a1618;
+            --ui-border: #4a3b32;
+            --btn-bg: #2d2420;
+            --gold: #ffcc00;
+            --neon-blue: #00f3ff;
+            --neon-cyan: #00ffff;
+            --neon-magenta: #ff00ff;
+            --neon-lime: #00ff66;
+            --neon-orange: #ff8800;
+            --neon-purple: #aa44ff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0a0a;
+            color: white;
+            font-family: 'Roboto', sans-serif;
+            overflow: hidden;
+            cursor: none;
+            user-select: none;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- 16:9 Responsive Frame --- */
+        #gameFrame {
+            position: relative;
+            width: min(100vw, calc(100vh * 16 / 9));
+            height: min(100vh, calc(100vw * 9 / 16));
+            background: #000;
+            overflow: hidden;
+            border: 2px solid rgba(100, 80, 140, 0.5);
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(100, 50, 200, 0.15);
+        }
+        /* Inner viewport: fixed 1920x1080, scaled to fit #gameFrame */
+        #gameViewport {
+            position: absolute;
+            top: 0; left: 0;
+            width: 1920px;
+            height: 1080px;
+            transform-origin: top left;
+            background: radial-gradient(ellipse at center bottom, #1a0b2e 0%, #090114 60%, #000000 100%);
+            transition: filter 0.1s;
+        }
+        
+        .glitch-active {
+            text-shadow: 2px 0 #ff00ff, -2px 0 #00ffff;
+            filter: contrast(1.2) brightness(1.2);
+        }
+
+        /* --- Custom Cursor --- */
+        #customCursor {
+            position: fixed; top: 0; left: 0; width: 40px; height: 40px;
+            pointer-events: none; z-index: 1000;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: screen;
+        }
+        .crosshair-group {
+            animation: spinReticle 10s linear infinite;
+            transform-origin: center;
+        }
+        @keyframes spinReticle { 100% { transform: rotate(360deg); } }
+
+        /* --- Starfield & VFX Canvas --- */
+        #starfield {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+        }
+        #vfxCanvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 45; pointer-events: none; mix-blend-mode: screen;
+        }
+
+        /* --- Difficulty Select Screen --- */
+        #difficultyScreen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 500; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at center, #1a0b2e 0%, #090114 60%, #000 100%);
+        }
+        #difficultyScreen h1 {
+            font-family: 'Orbitron', sans-serif; font-size: 36px; font-weight: 900;
+            color: var(--gold); text-shadow: 0 0 20px rgba(255,204,0,0.5);
+            margin-bottom: 10px; letter-spacing: 3px;
+        }
+        #difficultyScreen p {
+            color: #887; font-size: 14px; margin-bottom: 40px;
+        }
+        .diff-buttons { display: flex; gap: 20px; }
+        .diff-btn {
+            width: 180px; padding: 20px; border-radius: 16px; cursor: pointer;
+            border: 2px solid #333; background: rgba(0,0,0,0.6);
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .diff-btn:hover { transform: scale(1.05); }
+        .diff-btn .diff-label {
+            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 16px;
+        }
+        .diff-btn .diff-range { font-size: 11px; color: #aaa; }
+        .diff-easy { border-color: #00ff66; }
+        .diff-easy:hover { box-shadow: 0 0 30px rgba(0,255,102,0.3); background: rgba(0,255,102,0.08); }
+        .diff-easy .diff-label { color: #00ff66; }
+        .diff-medium { border-color: #ffcc00; }
+        .diff-medium:hover { box-shadow: 0 0 30px rgba(255,204,0,0.3); background: rgba(255,204,0,0.08); }
+        .diff-medium .diff-label { color: #ffcc00; }
+        .diff-hard { border-color: #ff3344; }
+        .diff-hard:hover { box-shadow: 0 0 30px rgba(255,51,68,0.3); background: rgba(255,51,68,0.08); }
+        .diff-hard .diff-label { color: #ff3344; }
+
+        /* --- UI Top Balance & Mute --- */
+        .top-ui {
+            position: absolute; top: 20px; width: 100%;
+            display: flex; justify-content: center; z-index: 50;
+        }
+        .balance-box {
+            background: linear-gradient(90deg, transparent, rgba(0,0,0,0.8), transparent);
+            padding: 5px 40px;
+            border-bottom: 1px solid var(--gold);
+        }
+        .balance-text {
+            color: var(--gold); font-family: 'Orbitron', sans-serif; font-weight: 700;
+            font-size: 20px; text-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+            letter-spacing: 1px;
+        }
+
+        /* --- Counter Box (Top Left) --- */
+        .counter-box {
+            position: absolute; top: 30px; left: 40px; z-index: 50;
+            display: flex; align-items: center; gap: 10px;
+            font-family: 'Orbitron', sans-serif; color: var(--gold);
+            text-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+        }
+        .counter-icon svg { width: 32px; height: 32px; fill: var(--gold); filter: drop-shadow(0 0 5px var(--gold)); }
+        .counter-text { font-size: 24px; font-weight: 700; }
+
+        /* Mute Button */
+        #muteBtn {
+            position: absolute; top: 20px; right: 30px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(0,0,0,0.6); border: 1px solid #444;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 60; color: #aaa;
+            font-size: 20px; transition: all 0.2s;
+        }
+        #muteBtn:hover {
+            background: rgba(40,40,40,0.8); color: white; border-color: #777;
+            transform: scale(1.1);
+        }
+        #muteBtn.muted {
+            border-color: #ff3344; color: #ff3344;
+        }
+
+        /* --- Game Grid --- */
+        .game-container {
+            position: relative; z-index: 10; height: 1080px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .grid-wrapper {
+            display: flex; align-items: center; gap: 30px;
+            margin-top: 180px;
+        }
+        .enemy-grid {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 10px;
+        }
+        .enemy-row {
+            display: flex; justify-content: center; gap: 10px;
+        }
+
+        /* Side Legend */
+        .side-legend {
+            display: flex; flex-direction: column; gap: 12px;
+            padding-left: 20px;
+        }
+        .legend-item {
+            height: 60px; display: flex; align-items: center;
+            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 24px;
+            color: #fff; text-shadow: 0 0 10px currentColor;
+        }
+
+        .enemy-bubble {
+            width: 60px; height: 60px; /* CIRCLES */
+            border-radius: 50%; 
+            background: radial-gradient(circle at 30% 30%, rgba(80,70,100,0.4), rgba(30,20,50,0.8));
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; transition: all 0.15s;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.4);
+            cursor: crosshair;
+        }
+        .enemy-bubble.empty {
+            opacity: 0.3; pointer-events: none;
+            background: radial-gradient(circle at 30% 30%, rgba(60,50,80,0.2), rgba(20,15,40,0.5));
+        }
+        .enemy-bubble.destroyed {
+            pointer-events: none;
+            animation: bubbleDestroy 0.5s ease-out forwards;
+        }
+        @keyframes bubbleDestroy {
+            0% { transform: scale(1); opacity: 1; filter: brightness(1); }
+            30% { transform: scale(1.3); opacity: 1; filter: brightness(2) saturate(2); box-shadow: 0 0 30px currentColor; }
+            60% { transform: scale(0.4) rotate(180deg); opacity: 0.6; filter: brightness(3); }
+            100% { transform: scale(0); opacity: 0; filter: brightness(0); border:none; background:none; }
+        }
+        
+        .enemy-bubble.spawning {
+            animation: bubbleSpawn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes bubbleSpawn {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; filter: brightness(3); }
+            50% { transform: scale(1.2) rotate(0deg); opacity: 0.8; filter: brightness(1.5); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1); }
+        }
+        .enemy-bubble:not(.empty):not(.destroyed):hover {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue), inset 0 0 15px rgba(0,0,0,0.4);
+            z-index: 20; transform: scale(1.08);
+        }
+        .enemy-bubble.highlight-target {
+            border-color: var(--neon-cyan) !important;
+            box-shadow: 0 0 20px var(--neon-cyan), inset 0 0 10px rgba(0,243,255,0.2) !important;
+            transform: scale(1.1) !important;
+            z-index: 20 !important;
+        }
+        .enemy-bubble.highlight-target .ship-icon { display: none; }
+        .enemy-bubble.highlight-target .mult-preview { display: flex !important; }
+
+        .ship-icon {
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+        }
+        .multiplier-tag { display: none; } 
+
+        .mult-preview {
+            display: none; font-family: 'Orbitron', sans-serif; font-weight: 900;
+            font-size: 18px; color: #fff; text-shadow: 0 0 6px currentColor;
+        }
+
+        /* AOE indicator */
+        .aoe-indicator {
+            position: absolute; border: 3px solid rgba(255, 0, 0, 0.6); border-radius: 50%;
+            pointer-events: none; z-index: 15;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.4), inset 0 0 20px rgba(255, 0, 0, 0.2);
+            animation: aoeGlow 1s infinite alternate;
+        }
+        @keyframes aoeGlow { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        /* Bets tooltip */
+        #betsTooltip {
+            position: absolute; z-index: 100; pointer-events: none;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid var(--neon-cyan);
+            border-radius: 8px; 
+            padding: 8px 16px;
+            font-family: 'Orbitron', sans-serif; 
+            font-size: 22px; 
+            font-weight: 900;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px var(--neon-cyan);
+            white-space: nowrap; display: none;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+        }
+
+        /* Visual Feedback for Shield (Miss/Deflect) */
+        .shield-effect {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 20px #00aaff, inset 0 0 15px #00aaff;
+            background: rgba(0, 150, 255, 0.3);
+            border: 2px solid #fff;
+            animation: shieldFlash 0.4s ease-out forwards;
+            pointer-events: none;
+            z-index: 30;
+        }
+        @keyframes shieldFlash {
+            0% { transform: scale(1); opacity: 1; filter: brightness(2); }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 0; }
+        }
+
+        /* Big Win Popup */
+        .big-win-popup {
+            position: absolute; pointer-events: none; z-index: 300;
+            font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 48px; color: #00ff66;
+            text-shadow: 0 0 20px #00ff66, 0 0 40px #fff;
+            animation: winPop 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+            white-space: nowrap;
+        }
+        @keyframes winPop {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            40% { transform: translate(-50%, -100%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -120%) scale(1); opacity: 0; }
+        }
+
+        /* --- Player Fleet --- */
+        .fleet-container {
+            position: absolute; bottom: 370px; left: 50%;
+            transform: translateX(-50%); 
+            width: 0; height: 0; 
+            z-index: 30; pointer-events: none;
+            display: flex; justify-content: center;
+        }
+
+        .ship-wrapper {
+            position: absolute; bottom: 0; width: 160px; height: 160px;
+            transition: opacity 0.5s ease-out, transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* Ships - Centered Pivot Points */
+        #shipMain { left: 0; transform: translateX(-50%); z-index: 31; }
+        
+        #shipLeft { 
+            left: 0;
+            transform: translateX(calc(-50% - 220px)) translateY(40px) scale(0.8); 
+            opacity: 0; 
+            z-index: 30; 
+            filter: brightness(0.8);
+        }
+        #shipRight { 
+            left: 0;
+            transform: translateX(calc(-50% + 220px)) translateY(40px) scale(0.8); 
+            opacity: 0; 
+            z-index: 30;
+            filter: brightness(0.8);
+        }
+
+        #shipLeft.active { opacity: 1; transform: translateX(calc(-50% - 220px)) translateY(20px) scale(0.9); }
+        #shipRight.active { opacity: 1; transform: translateX(calc(-50% + 220px)) translateY(20px) scale(0.9); }
+
+        .ship-body {
+            position: absolute; bottom: -60px; left: 0; width: 100%; height: 100%; z-index: 30;
+        }
+        .turret-head {
+            position: absolute; left: 50%; top: calc(40% + 35px); width: 60px; height: 100px;
+            transform-origin: 50% 70%; transform: translate(-50%, -50%) rotate(0deg); z-index: 32;
+        }
+        .turret-svg {
+            width: 100%; height: 100%; filter: drop-shadow(0 0 8px rgba(0, 150, 255, 0.4));
+        }
+        .recoil-anim { animation: recoil 0.1s ease-out; }
+        @keyframes recoil {
+            0% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0); }
+            40% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(12px); }
+            100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0); }
+        }
+
+        /* --- UI Control Panel --- */
+        .ui-wrapper {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100;
+        }
+        .control-panel {
+            background-color: rgba(26, 22, 24, 0.92);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1); border-bottom: 4px solid var(--ui-border);
+            border-radius: 24px; padding: 15px 25px; width: 400px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; gap: 12px; position: relative;
+        }
+        .control-panel::before {
+            content:''; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            width: 40px; height: 4px; background: #333; border-radius: 2px;
+        }
+        .panel-label {
+            color: #887; font-size: 9px; font-weight: 700;
+            text-align: center; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 2px;
+        }
+        .weapon-row { display: flex; justify-content: space-between; padding: 0 5px; }
+        .weapon-btn {
+            width: 52px; height: 52px; border-radius: 12px;
+            background: var(--btn-bg); border: 1px solid #3d3430;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            transition: all 0.1s; position: relative; overflow: hidden;
+        }
+        /* Weapon color tints omitted for brevity but present in logic */
+        .weapon-btn:nth-child(1) { background: linear-gradient(145deg, rgba(0,128,255,0.08), var(--btn-bg)); border-color: rgba(0,128,255,0.2); }
+        .weapon-btn:nth-child(1).active { background: linear-gradient(145deg, rgba(0,128,255,0.25), #2d2420); border-color: rgba(0,128,255,0.6); color: rgba(0,128,255,0.4); }
+        .weapon-btn:nth-child(1) svg { fill: rgba(100,160,255,0.7); }
+        .weapon-btn:nth-child(1).active svg { fill: #5fa8ff; filter: drop-shadow(0 0 5px #0080ff); }
+        
+        .weapon-btn:nth-child(2) { background: linear-gradient(145deg, rgba(255,204,0,0.08), var(--btn-bg)); border-color: rgba(255,204,0,0.2); }
+        .weapon-btn:nth-child(2) svg { fill: rgba(255,204,100,0.7); }
+        .weapon-btn:nth-child(2).active { background: linear-gradient(145deg, rgba(255,204,0,0.25), #2d2420); border-color: rgba(255,204,0,0.6); }
+        .weapon-btn:nth-child(2).active svg { fill: #ffcc00; filter: drop-shadow(0 0 5px #ffcc00); }
+
+        /* SWAPPED: Now Explosion (Red) is nth-child(3) in styles */
+        .weapon-btn:nth-child(3) { background: linear-gradient(145deg, rgba(255,0,0,0.08), var(--btn-bg)); border-color: rgba(255,0,0,0.2); }
+        .weapon-btn:nth-child(3) svg { fill: rgba(255,100,100,0.7); }
+        .weapon-btn:nth-child(3).active { background: linear-gradient(145deg, rgba(255,0,0,0.25), #2d2420); border-color: rgba(255,0,0,0.6); }
+        .weapon-btn:nth-child(3).active svg { fill: #ff4444; filter: drop-shadow(0 0 5px #ff0000); }
+
+        /* SWAPPED: Now Lightning (Green) is nth-child(4) in styles */
+        .weapon-btn:nth-child(4) { background: linear-gradient(145deg, rgba(0,255,102,0.08), var(--btn-bg)); border-color: rgba(0,255,102,0.2); }
+        .weapon-btn:nth-child(4) svg { fill: rgba(100,255,150,0.7); }
+        .weapon-btn:nth-child(4).active { background: linear-gradient(145deg, rgba(0,255,102,0.25), #2d2420); border-color: rgba(0,255,102,0.6); }
+        .weapon-btn:nth-child(4).active svg { fill: #00ff66; filter: drop-shadow(0 0 5px #00ff66); }
+
+        .weapon-btn:nth-child(5) { background: linear-gradient(145deg, rgba(170,68,255,0.08), var(--btn-bg)); border-color: rgba(170,68,255,0.2); }
+        .weapon-btn:nth-child(5) svg { fill: rgba(200,120,255,0.7); }
+        .weapon-btn:nth-child(5).active { background: linear-gradient(145deg, rgba(170,68,255,0.25), #2d2420); border-color: rgba(170,68,255,0.6); }
+        .weapon-btn:nth-child(5).active svg { fill: #aa44ff; filter: drop-shadow(0 0 5px #aa44ff); }
+
+        .weapon-btn svg { width: 28px; height: 28px; transition: fill 0.2s; }
+        .weapon-btn.active { box-shadow: 0 0 15px currentColor; }
+
+        .bet-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+        .plus-minus-btn {
+            background: #221c1a; border: 1px solid #3d3430; color: #aaa;
+            font-size: 20px; font-weight: bold; cursor: pointer;
+            width: 32px; height: 32px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .plus-minus-btn:hover { color: #fff; border-color: #666; }
+        .bet-pill {
+            background-color: #0f0b0d; border: 1px solid #3d3430; border-radius: 8px;
+            height: 48px; display: flex; align-items: center; padding: 4px; flex-grow: 1;
+        }
+        .inner-btn {
+            background-color: #2d2420; color: #887; border: none; border-radius: 6px;
+            width: 45px; height: 100%; font-weight: bold; font-size: 11px;
+            cursor: pointer; transition: 0.2s;
+        }
+        .inner-btn:hover { background-color: #3e322d; color: white; }
+        .bet-display {
+            flex-grow: 1; text-align: center; color: var(--gold);
+            font-size: 18px; font-weight: 700; font-family: 'Roboto', sans-serif;
+            letter-spacing: 0.5px;
+        }
+        .action-row { display: flex; justify-content: center; gap: 24px; margin-top: 5px; align-items: center; }
+        .big-btn {
+            width: 56px; height: 56px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: transform 0.1s, filter 0.2s;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        .big-btn:active { transform: scale(0.92); }
+        .big-btn svg { width: 28px; height: 28px; fill: white; }
+        .btn-info { background: #4a3b52; }
+        .btn-refresh {
+            background: radial-gradient(circle at 30% 30%, #00aaff, #005588); width: 72px; height: 72px;
+            box-shadow: 0 0 20px rgba(0, 170, 255, 0.4); border: 2px solid #00ccff;
+        }
+        .btn-speed { background: #664422; }
+
+        /* --- Visual Effects Classes --- */
+        .projectile {
+            position: absolute; width: 8px; height: 24px; background: #00ffff;
+            border-radius: 4px; box-shadow: 0 0 10px #00ffff, 0 0 20px #ffffff;
+            z-index: 25; pointer-events: none; mix-blend-mode: screen;
+        }
+        .lightning-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 45; }
+        .lightning-path {
+            stroke: #00ff66; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+            fill: none; filter: drop-shadow(0 0 8px #00ff66); animation: flash 0.25s forwards;
+        }
+        @keyframes flash { 0% { opacity: 1; stroke-width: 5; } 100% { opacity: 0; stroke-width: 1; } }
+
+        .mega-beam { position: absolute; transform-origin: bottom center; z-index: 24; pointer-events: none; mix-blend-mode: screen; }
+        .bomb-area {
+            position: absolute; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,180,50,0.9) 0%, rgba(255,50,0,0.5) 50%, transparent 70%);
+            transform: translate(-50%, -50%) scale(0); pointer-events: none; z-index: 35;
+            animation: bombExplode 0.4s forwards cubic-bezier(0.1, 0.9, 0.2, 1); mix-blend-mode: screen;
+        }
+        @keyframes bombExplode { 0% { transform: translate(-50%, -50%) scale(0.1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; } }
+        @keyframes megaBombExplode { 0% { transform: translate(-50%, -50%) scale(0.1); opacity: 1; } 50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(2); opacity: 0; } }
+        @keyframes bfgRing { 0% { width: 20px; height: 20px; opacity: 1; border-width: 20px; } 100% { width: 500px; height: 500px; opacity: 0; border-width: 0px; } }
+
+        .explosion {
+            position: absolute; pointer-events: none; z-index: 40; width: 80px; height: 80px;
+            transform: translate(-50%, -50%);
+            background: radial-gradient(circle, #fff 0%, #0ff 40%, transparent 70%);
+            animation: explodeAnim 0.3s forwards ease-out; opacity: 0;
+        }
+        @keyframes explodeAnim { 0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; } }
+
+        .win-total-popup {
+            position: absolute; z-index: 200; pointer-events: none;
+            font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 28px; color: #00ff66;
+            text-shadow: 0 0 15px #00ff66, 0 0 30px rgba(0,255,102,0.5);
+            transition: transform 0.8s ease-out, opacity 0.8s ease-out;
+        }
+
+        .beam-vfx { position: absolute; pointer-events: none; z-index: 24; mix-blend-mode: screen; }
+        .beam-vfx-inner {
+            width: 100%; height: 100%;
+            background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(200,100,255,0.6) 20%, rgba(255,255,255,0.9) 50%, rgba(200,100,255,0.6) 80%, rgba(255,255,255,0) 100%);
+            animation: beamPulse 0.5s forwards;
+        }
+        @keyframes beamPulse { 0% { opacity: 0.3; } 30% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes beamCharge { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+        @keyframes particleMove { 0% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(800px); opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div id="customCursor">
+        <svg viewBox="0 0 40 40">
+            <g class="crosshair-group">
+                <circle cx="20" cy="20" r="12" fill="none" stroke="#00ffff" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.8"/>
+                <line x1="20" y1="5" x2="20" y2="12" stroke="#00ffff" stroke-width="2"/>
+                <line x1="20" y1="28" x2="20" y2="35" stroke="#00ffff" stroke-width="2"/>
+                <line x1="5" y1="20" x2="12" y2="20" stroke="#00ffff" stroke-width="2"/>
+                <line x1="28" y1="20" x2="35" y2="20" stroke="#00ffff" stroke-width="2"/>
+            </g>
+            <circle cx="20" cy="20" r="2" fill="#fff"/>
+        </svg>
+    </div>
+
+    <div id="gameFrame">
+    <div id="gameViewport">
+    <canvas id="starfield"></canvas>
+    <canvas id="vfxCanvas"></canvas>
+
+    <div class="counter-box">
+        <div class="counter-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2.5-5.5l-1.5-1.5 4-4 4 4-1.5 1.5-2.5-2.5-2.5 2.5z"/></svg> 
+        </div>
+        <div class="counter-text" id="destroyedCounter">0/64</div>
+    </div>
+
+    <div id="muteBtn" onclick="toggleMute()" title="Toggle Sound">🔊</div>
+
+    <div id="difficultyScreen">
+        <h1>GALACTIC INVASION</h1>
+        <p>Select your risk level</p>
+        <div class="diff-buttons">
+            <div class="diff-btn diff-easy" onclick="startGame('easy')">
+                <div class="diff-label">🟢 NORMAL</div>
+                <div style="font-size:10px;color:#666;">Standard Payouts</div>
+            </div>
+            <div class="diff-btn diff-hard" onclick="startGame('hard')">
+                <div class="diff-label">🔴 TURBO</div>
+                <div style="font-size:10px;color:#666;">Faster Animation</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="top-ui">
+        <div class="balance-box">
+            <span class="balance-text">Balance: $<span id="balance">999,999.00</span></span>
+        </div>
+    </div>
+
+    <svg id="lightningLayer" class="lightning-svg"></svg>
+    <div id="betsTooltip"></div>
+
+    <div class="game-container" id="gameContainer" style="display:none;">
+        <div class="grid-wrapper">
+            <div class="enemy-grid" id="enemyGrid"></div>
+            <div class="side-legend" id="sideLegend"></div>
+        </div>
+
+        <!-- NEW FLEET CONTAINER -->
+        <div class="fleet-container">
+            <!-- Left Clone -->
+            <div class="ship-wrapper" id="shipLeft">
+                <div class="ship-body">
+                   <svg viewBox="0 0 220 220" style="width:100%; height:100%; filter: drop-shadow(0 10px 30px rgba(0,0,0,0.9));">
+                    <defs>
+                        <linearGradient id="hullMetalL" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6a7a8a"/><stop offset="40%" stop-color="#4a5a6a"/><stop offset="100%" stop-color="#2a3a4a"/></linearGradient>
+                        <linearGradient id="wingGradientL" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#5a6a7a"/><stop offset="50%" stop-color="#3a4a5a"/><stop offset="100%" stop-color="#2a3a4a"/></linearGradient>
+                        <radialGradient id="cyanGlowL"><stop offset="0%" stop-color="#00ffff"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+                    </defs>
+                    <path d="M110 30 L130 80 L135 120 L132 155 L120 170 L100 170 L88 155 L85 120 L90 80 Z" fill="url(#hullMetalL)" stroke="#889" stroke-width="2"/>
+                    <!-- Triangular Left Wing -->
+                    <path d="M90 90 L20 140 L90 150 Z" fill="url(#wingGradientL)" stroke="#778" stroke-width="2.5" opacity="0.95"/>
+                    <!-- Triangular Right Wing -->
+                    <path d="M130 90 L200 140 L130 150 Z" fill="url(#wingGradientL)" stroke="#778" stroke-width="2.5" opacity="0.95"/>
+                    <rect x="106" y="50" width="3" height="4" fill="#ffcc00"/>
+                    <rect x="111" y="50" width="3" height="4" fill="#ffcc00"/>
+                   </svg>
+                </div>
+                <div class="turret-head">
+                    <svg class="turret-svg" viewBox="0 0 60 100">
+                        <defs><linearGradient id="gunGradL" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#445566"/><stop offset="50%" stop-color="#778899"/><stop offset="100%" stop-color="#445566"/></linearGradient></defs>
+                        <rect x="10" y="0" width="8" height="60" fill="url(#gunGradL)" stroke="#223344"/>
+                        <rect x="42" y="0" width="8" height="60" fill="url(#gunGradL)" stroke="#223344"/>
+                        <rect x="8" y="-4" width="12" height="6" fill="#222" stroke="#00ccff" stroke-width="1"/>
+                        <rect x="40" y="-4" width="12" height="6" fill="#222" stroke="#00ccff" stroke-width="1"/>
+                        <path d="M15 40 L45 40 L50 90 L10 90 Z" fill="#334455" stroke="#556677" stroke-width="1.5"/>
+                        <circle cx="30" cy="70" r="10" fill="#001122" stroke="#00ccff" stroke-width="2"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Main Ship (Center) -->
+            <div class="ship-wrapper" id="shipMain">
+                <div class="ship-body">
+                    <svg viewBox="0 0 220 220" style="width:100%; height:100%; filter: drop-shadow(0 10px 30px rgba(0,0,0,0.9));">
+                        <defs>
+                            <linearGradient id="hullMetal" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6a7a8a"/><stop offset="40%" stop-color="#4a5a6a"/><stop offset="100%" stop-color="#2a3a4a"/></linearGradient>
+                            <linearGradient id="darkPanel" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3a4a5a"/><stop offset="100%" stop-color="#1a2a3a"/></linearGradient>
+                            <linearGradient id="wingGradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#5a6a7a"/><stop offset="50%" stop-color="#3a4a5a"/><stop offset="100%" stop-color="#2a3a4a"/></linearGradient>
+                            <radialGradient id="cyanGlow"><stop offset="0%" stop-color="#00ffff"/><stop offset="50%" stop-color="#00ccff"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+                            <linearGradient id="windowGlow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffcc00"/><stop offset="100%" stop-color="#ff8800"/></linearGradient>
+                        </defs>
+                        <path d="M110 30 L130 80 L135 120 L132 155 L120 170 L100 170 L88 155 L85 120 L90 80 Z" fill="url(#hullMetal)" stroke="#889" stroke-width="2"/>
+                        <ellipse cx="110" cy="55" rx="18" ry="14" fill="url(#darkPanel)" stroke="#667" stroke-width="1.5"/>
+                        <ellipse cx="110" cy="55" rx="14" ry="11" fill="#001122" opacity="0.9"/>
+                        <!-- Triangular Left Wing -->
+                        <path d="M90 90 L20 140 L90 150 Z" fill="url(#wingGradient)" stroke="#778" stroke-width="2.5" opacity="0.95"/>
+                         <!-- Triangular Right Wing -->
+                        <path d="M130 90 L200 140 L130 150 Z" fill="url(#wingGradient)" stroke="#778" stroke-width="2.5" opacity="0.95"/>
+                        
+                        <rect x="106" y="50" width="3" height="4" rx="0.5" fill="url(#windowGlow)"><animate attributeName="opacity" values="0.8;1;0.8" dur="3s" repeatCount="indefinite"/></rect>
+                        <rect x="111" y="50" width="3" height="4" rx="0.5" fill="url(#windowGlow)"><animate attributeName="opacity" values="0.8;1;0.8" dur="3s" begin="1.5s" repeatCount="indefinite"/></rect>
+                    </svg>
+                </div>
+                <div class="turret-head">
+                    <svg class="turret-svg" viewBox="0 0 60 100">
+                        <defs><linearGradient id="gunGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#445566"/><stop offset="50%" stop-color="#778899"/><stop offset="100%" stop-color="#445566"/></linearGradient></defs>
+                        <rect x="10" y="0" width="8" height="60" fill="url(#gunGrad)" stroke="#223344"/>
+                        <rect x="42" y="0" width="8" height="60" fill="url(#gunGrad)" stroke="#223344"/>
+                        <rect x="8" y="-4" width="12" height="6" fill="#222" stroke="#00ccff" stroke-width="1"/>
+                        <rect x="40" y="-4" width="12" height="6" fill="#222" stroke="#00ccff" stroke-width="1"/>
+                        <path d="M15 40 L45 40 L50 90 L10 90 Z" fill="#334455" stroke="#556677" stroke-width="1.5"/>
+                        <circle cx="30" cy="70" r="10" fill="#001122" stroke="#00ccff" stroke-width="2"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Right Clone -->
+            <div class="ship-wrapper" id="shipRight">
+                <div class="ship-body">
+                    <svg viewBox="0 0 220 220" style="width:100%; height:100%; filter: drop-shadow(0 10px 30px rgba(0,0,0,0.9));">
+                        <defs>
+                            <linearGradient id="hullMetalR" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6a7a8a"/><stop offset="40%" stop-color="#4a5a6a"/><stop offset="100%" stop-color="#2a3a4a"/></linearGradient>
+                            <linearGradient id="wingGradientR" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#5a6a7a"/><stop offset="50%" stop-color="#3a4a5a"/><stop offset="100%" stop-color="#2a3a4a"/></linearGradient>
+                        </defs>
+                        <path d="M110 30 L130 80 L135 120 L132 155 L120 170 L100 170 L88 155 L85 120 L90 80 Z" fill="url(#hullMetalR)" stroke="#889" stroke-width="2"/>
+                        <!-- Triangular Left Wing -->
+                        <path d="M90 90 L20 140 L90 150 Z" fill="url(#wingGradientR)" stroke="#778" stroke-width="2.5" opacity="0.95"/>
+                        <!-- Triangular Right Wing -->
+                        <path d="M130 90 L200 140 L130 150 Z" fill="url(#wingGradientR)" stroke="#778" stroke-width="2.5" opacity="0.95"/>
+                        <rect x="106" y="50" width="3" height="4" fill="#ffcc00"/>
+                        <rect x="111" y="50" width="3" height="4" fill="#ffcc00"/>
+                    </svg>
+                </div>
+                <div class="turret-head">
+                    <svg class="turret-svg" viewBox="0 0 60 100">
+                        <defs><linearGradient id="gunGradR" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#445566"/><stop offset="50%" stop-color="#778899"/><stop offset="100%" stop-color="#445566"/></linearGradient></defs>
+                        <rect x="10" y="0" width="8" height="60" fill="url(#gunGradR)" stroke="#223344"/>
+                        <rect x="42" y="0" width="8" height="60" fill="url(#gunGradR)" stroke="#223344"/>
+                        <rect x="8" y="-4" width="12" height="6" fill="#222" stroke="#00ccff" stroke-width="1"/>
+                        <rect x="40" y="-4" width="12" height="6" fill="#222" stroke="#00ccff" stroke-width="1"/>
+                        <path d="M15 40 L45 40 L50 90 L10 90 Z" fill="#334455" stroke="#556677" stroke-width="1.5"/>
+                        <circle cx="30" cy="70" r="10" fill="#001122" stroke="#00ccff" stroke-width="2"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="ui-wrapper" id="uiWrapper">
+            <div class="control-panel">
+                <div class="panel-label">Weapon</div>
+                <div class="weapon-row">
+                    <button class="weapon-btn active" onclick="selectWeapon(0)" data-id="0" title="Single Cannon (1 Bet)">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5" fill="currentColor"/><rect x="11" y="7" width="2" height="13" rx="1" fill="currentColor" opacity="0.6"/></svg>
+                    </button>
+                    <button class="weapon-btn" onclick="selectWeapon(1)" data-id="1" title="Triple Cannon (3 Bets)">
+                        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="2.5" height="16" rx="1" fill="currentColor"/><rect x="10.75" y="4" width="2.5" height="16" rx="1" fill="currentColor"/><rect x="17.5" y="4" width="2.5" height="16" rx="1" fill="currentColor"/></svg>
+                    </button>
+                    <button class="weapon-btn" onclick="selectWeapon(3)" data-id="3" title="Explosion (N Bets)">
+                        <svg viewBox="0 0 24 24"><path d="M12 2l2.1 5.3L20 6l-3.7 4.5L22 12l-5.7 1.5L20 18l-5.9-1.3L12 22l-2.1-5.3L4 18l3.7-4.5L2 12l5.7-1.5L4 6l5.9 1.3z" fill="currentColor"/></svg>
+                    </button>
+                    <button class="weapon-btn" onclick="selectWeapon(2)" data-id="2" title="Chain Lightning (N Bets)">
+                        <svg viewBox="0 0 24 24"><path d="M13 2L4.5 13H11l-1.5 9L19.5 11H13L15 2H13z" fill="currentColor"/></svg>
+                    </button>
+                    <button class="weapon-btn" onclick="selectWeapon(4)" data-id="4" title="Ray Beam (N Bets)">
+                        <svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="20" rx="3" fill="currentColor" opacity="0.3"/><rect x="10.5" y="2" width="3" height="20" rx="1.5" fill="currentColor" opacity="0.6"/><rect x="11.25" y="2" width="1.5" height="20" rx="0.75" fill="currentColor"/></svg>
+                    </button>
+                </div>
+
+                <div class="panel-label" style="margin-top: 5px;">Bet Amount</div>
+                <div class="bet-row">
+                    <button class="plus-minus-btn" onclick="adjustBet(-0.1)">−</button>
+                    <div class="bet-pill">
+                        <button class="inner-btn" onclick="adjustBet('half')">½</button>
+                        <div class="bet-display">$<span id="betAmount">0.10</span></div>
+                        <button class="inner-btn" onclick="adjustBet('double')">2x</button>
+                    </div>
+                    <button class="plus-minus-btn" onclick="adjustBet(0.1)">+</button>
+                </div>
+
+                <div class="action-row">
+                    <button class="big-btn btn-info" title="Info">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                    </button>
+                    <button class="big-btn btn-refresh" id="refreshBtn" title="Refresh Grid">
+                        <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                    </button>
+                    <button class="big-btn btn-speed" title="Fast Forward">
+                        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div><!-- /gameViewport -->
+    </div><!-- /gameFrame -->
+
+    <script>
+    /* =====================================================================
+       GALACTIC INVASION — Full Game Logic
+       ===================================================================== */
+
+    // --- CONFIGURATION ---
+    const ROW_CONFIG = [
+        { mult: 30,  color: '#aa44ff', name: 'sentinel' }, 
+        { mult: 10,  color: '#ff3344', name: 'fighter' }, 
+        { mult: 5,   color: '#00ccff', name: 'cruiser' }, 
+        { mult: 2,   color: '#00ff66', name: 'scout' }
+    ];
+
+    const SHIP_SVGS = {
+        'sentinel': `<svg viewBox="0 0 40 40"><path d="M20 2 L36 14 L32 34 L8 34 L4 14 Z" fill="#1a0033" stroke="#aa44ff" stroke-width="1.5"/><circle cx="20" cy="18" r="5" fill="#cc77ff" opacity="0.6"/></svg>`,
+        'fighter': `<svg viewBox="0 0 40 40"><path d="M20 2 L30 25 L38 32 L20 38 L2 32 L10 25 Z" fill="#660011" stroke="#ff3344" stroke-width="1.5"/><circle cx="20" cy="20" r="3" fill="#ff6644"/></svg>`,
+        'cruiser': `<svg viewBox="0 0 40 40"><rect x="8" y="8" width="24" height="24" rx="4" fill="#002244" stroke="#00ccff" stroke-width="1.5"/><circle cx="20" cy="20" r="6" fill="#00eeff" opacity="0.6"/></svg>`,
+        'scout': `<svg viewBox="0 0 40 40"><path d="M20 4 C32 4 36 16 36 28 Q36 36 20 38 Q4 36 4 28 C4 16 8 4 20 4" fill="#003311" stroke="#00ff66" stroke-width="1.5"/><circle cx="14" cy="16" r="2.5" fill="#0f0"/><circle cx="26" cy="16" r="2.5" fill="#0f0"/></svg>`
+    };
+
+    const GRID_ROWS = 4;
+    const GRID_COLS = 16; 
+
+    // --- STATE ---
+    let balance = 999999.00;
+    let displayBalance = 999999.00; 
+    let bet = 0.10;
+    let currentWeapon = 0; 
+    let gridData = []; 
+    let destroyedCount = 0;
+    let totalCells = GRID_ROWS * GRID_COLS;
+    let hoveredTargets = []; 
+    let lastHoveredCell = null;
+    let isMobileTapOne = false;
+    let mobileTapTargets = [];
+    let isMuted = false;
+    
+    // NEW: Fleet State
+    let activeShips = 1; // Starts with 1 main ship, max 3
+
+    // VFX State
+    let screenShake = { x: 0, y: 0, intensity: 0 };
+    let particles = [];
+
+    // Audio Context
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    const masterGain = audioCtx.createGain(); 
+    masterGain.connect(audioCtx.destination); 
+    masterGain.gain.value = 1; 
+
+    let isAudioInited = false;
+
+    // DOM refs
+    const gameFrame = document.getElementById('gameFrame');
+    const gameViewport = document.getElementById('gameViewport');
+    const balanceEl = document.getElementById('balance');
+    const betEl = document.getElementById('betAmount');
+    const gridEl = document.getElementById('enemyGrid');
+    
+    // Updated to query ALL turrets
+    const turretHeads = document.querySelectorAll('.turret-head');
+    
+    const cursor = document.getElementById('customCursor');
+    const weaponBtns = document.querySelectorAll('.weapon-btn');
+    const lightningLayer = document.getElementById('lightningLayer');
+    const betsTooltip = document.getElementById('betsTooltip');
+    const vfxCanvas = document.getElementById('vfxCanvas');
+    const vfxCtx = vfxCanvas.getContext('2d');
+    const muteBtn = document.getElementById('muteBtn');
+    const sideLegend = document.getElementById('sideLegend');
+    const destroyedCounterEl = document.getElementById('destroyedCounter');
+    
+    // Ship elements
+    const shipLeft = document.getElementById('shipLeft');
+    const shipRight = document.getElementById('shipRight');
+
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    
+    // Parallax Interpolation
+    let targetRelMouseX = 0; 
+    let targetRelMouseY = 0;
+    let currentRelMouseX = 0;
+    let currentRelMouseY = 0;
+
+    // --- SOUND SYSTEM ---
+    function initAudio() {
+        if (!isAudioInited) {
+            audioCtx.resume();
+            isAudioInited = true;
+        }
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        if (isMuted) {
+            masterGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+            muteBtn.innerText = '🔇';
+            muteBtn.classList.add('muted');
+        } else {
+            masterGain.gain.setTargetAtTime(1, audioCtx.currentTime, 0.1);
+            muteBtn.innerText = '🔊';
+            muteBtn.classList.remove('muted');
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+    }
+
+    const SoundManager = {
+        playTone: (freq, type, duration, vol = 0.1) => {
+            if (audioCtx.state === 'suspended') return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(masterGain); 
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        },
+        playShoot: (weaponType) => {
+            const t = audioCtx.currentTime;
+            
+            if (weaponType === 0) { // 1. Blaster
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, t);
+                osc.frequency.exponentialRampToValueAtTime(100, t + 0.15);
+                gain.gain.setValueAtTime(0.1, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                osc.stop(t + 0.2);
+            } 
+            else if (weaponType === 1) { // 2. Triple Blaster
+                for(let i=0; i<3; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(600 - (i*50), t + i*0.03);
+                    osc.frequency.exponentialRampToValueAtTime(100, t + 0.15 + i*0.03);
+                    gain.gain.setValueAtTime(0.1, t + i*0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15 + i*0.03);
+                    osc.connect(gain);
+                    gain.connect(masterGain);
+                    osc.start(t + i*0.03);
+                    osc.stop(t + 0.2 + i*0.03);
+                }
+            }
+            else if (weaponType === 2) { // 3. Lightning
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(1200, t);
+                osc.frequency.linearRampToValueAtTime(200, t + 0.1);
+                gain.gain.setValueAtTime(0.15, t);
+                gain.gain.setValueAtTime(0, t + 0.02);
+                gain.gain.setValueAtTime(0.15, t + 0.04);
+                gain.gain.setValueAtTime(0, t + 0.06);
+                gain.gain.setValueAtTime(0.15, t + 0.08);
+                gain.gain.linearRampToValueAtTime(0, t + 0.2);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                osc.stop(t + 0.2);
+            } 
+            else if (weaponType === 3) { // 4. Bomb
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, t);
+                osc.frequency.exponentialRampToValueAtTime(50, t + 0.3);
+                gain.gain.setValueAtTime(0.3, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                osc.stop(t + 0.3);
+            } 
+            else if (weaponType === 4) { // 5. Mega Laser (REDUCED VOLUME)
+                const osc1 = audioCtx.createOscillator();
+                const osc2 = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc1.type = 'sawtooth';
+                osc2.type = 'square';
+                
+                osc1.frequency.setValueAtTime(100, t);
+                osc2.frequency.setValueAtTime(104, t); 
+                
+                gain.gain.setValueAtTime(0.02, t); 
+                gain.gain.linearRampToValueAtTime(0.06, t + 0.1); 
+                gain.gain.setValueAtTime(0.06, t + 0.6); 
+                gain.gain.linearRampToValueAtTime(0, t + 0.8);
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(masterGain);
+                
+                osc1.start();
+                osc2.start();
+                osc1.stop(t + 0.8);
+                osc2.stop(t + 0.8);
+            }
+        },
+        playExplosion: () => {
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100, t);
+            osc.frequency.exponentialRampToValueAtTime(10, t + 0.3);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start();
+            osc.stop(t + 0.3);
+        },
+        playWin: () => {
+            const now = audioCtx.currentTime;
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + i * 0.08);
+                gain.gain.setValueAtTime(0.1, now + i * 0.08);
+                gain.gain.linearRampToValueAtTime(0, now + i * 0.08 + 0.3);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start(now + i * 0.08);
+                osc.stop(now + i * 0.08 + 0.3);
+            });
+        }
+    };
+
+    // --- PARTICLE SYSTEM ---
+    function spawnParticles(x, y, color, count = 10) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 4 + 2;
+            particles.push({
+                x: x, y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1.0,
+                decay: Math.random() * 0.03 + 0.02,
+                color: color || '#ffffff',
+                size: Math.random() * 3 + 1
+            });
+        }
+    }
+
+    function updateVFX() {
+        vfxCtx.clearRect(0, 0, 1920, 1080);
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.1; // Gravity
+            p.life -= p.decay;
+            
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+                continue;
+            }
+
+            vfxCtx.globalAlpha = p.life;
+            vfxCtx.fillStyle = p.color;
+            vfxCtx.beginPath();
+            vfxCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            vfxCtx.fill();
+        }
+        vfxCtx.globalAlpha = 1.0;
+
+        if (screenShake.intensity > 0) {
+            screenShake.x = (Math.random() - 0.5) * screenShake.intensity;
+            screenShake.y = (Math.random() - 0.5) * screenShake.intensity;
+            screenShake.intensity *= 0.9;
+            if (screenShake.intensity < 0.5) screenShake.intensity = 0;
+        } else {
+            screenShake.x = 0;
+            screenShake.y = 0;
+        }
+
+        const fw = gameFrame.clientWidth;
+        const fh = gameFrame.clientHeight;
+        const scale = Math.min(fw / 1920, fh / 1080);
+        
+        gameViewport.style.transform = `scale(${scale}) translate(${screenShake.x}px, ${screenShake.y}px)`;
+
+        if (displayBalance < balance) {
+            displayBalance += (balance - displayBalance) * 0.1;
+            if (Math.abs(balance - displayBalance) < 0.01) displayBalance = balance;
+            balanceEl.innerText = displayBalance.toLocaleString('en-US', {minimumFractionDigits: 2});
+        }
+        
+        currentRelMouseX += (targetRelMouseX - currentRelMouseX) * 0.05;
+        currentRelMouseY += (targetRelMouseY - currentRelMouseY) * 0.05;
+
+        requestAnimationFrame(updateVFX);
+    }
+    
+    vfxCanvas.width = 1920; vfxCanvas.height = 1080;
+    updateVFX();
+
+    // --- DIFFICULTY START ---
+    function startGame(diff) {
+        initAudio();
+        document.getElementById('difficultyScreen').style.display = 'none';
+        document.getElementById('gameContainer').style.display = 'flex';
+        initGrid();
+    }
+
+    // --- GRID DATA MODEL ---
+    let nextId = 0;
+    function createCell(row, col, isNew = false) {
+        const config = ROW_CONFIG[row];
+        return {
+            id: nextId++,
+            row, col,
+            multiplier: config.mult,
+            type: config.name,
+            color: config.color,
+            isDestroyed: false,
+            isEmpty: false, // In matrix mode, always full initially
+            isNew: isNew
+        };
+    }
+
+    function initGrid() {
+        gridData = [];
+        gridEl.innerHTML = '';
+        destroyedCount = 0;
+        totalCells = GRID_ROWS * GRID_COLS;
+        updateCounter();
+        renderLegend();
+        
+        for (let r = 0; r < GRID_ROWS; r++) {
+            const rowData = [];
+            for (let c = 0; c < GRID_COLS; c++) {
+                rowData.push(createCell(r, c, true));
+            }
+            gridData.push(rowData);
+        }
+        
+        renderGrid();
+    }
+
+    function renderLegend() {
+        sideLegend.innerHTML = '';
+        ROW_CONFIG.forEach(cfg => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.style.color = cfg.color;
+            item.innerText = formatMult(cfg.mult);
+            sideLegend.appendChild(item);
+        });
+    }
+
+    function updateCounter() {
+        destroyedCounterEl.innerText = `${destroyedCount}/${totalCells}`;
+    }
+
+    function renderGrid() {
+        gridEl.innerHTML = '';
+        for (let r = 0; r < gridData.length; r++) {
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'enemy-row';
+            // No offset for matrix
+
+            for (let c = 0; c < gridData[r].length; c++) {
+                const cell = gridData[r][c];
+                const bubble = document.createElement('div');
+                bubble.className = 'enemy-bubble';
+                bubble.dataset.row = r;
+                bubble.dataset.col = c;
+                bubble.dataset.id = cell.id;
+
+                if (cell.isDestroyed) {
+                    bubble.style.visibility = 'hidden';
+                    bubble.style.pointerEvents = 'none';
+                } else {
+                    const svg = SHIP_SVGS[cell.type];
+                    // Using fixed row colors
+                    const multColor = cell.color; 
+                    
+                    bubble.innerHTML = `
+                        <div class="ship-icon">${svg}</div>
+                        <div class="mult-preview" style="color:${multColor}">${formatMult(cell.multiplier)}</div>
+                    `;
+                    
+                    if (cell.isNew) {
+                        bubble.classList.add('spawning');
+                        bubble.style.animationDelay = `${(r * 10 + c) * 0.02}s`; // Faster spawn for more cells
+                    }
+                    
+                    bubble.addEventListener('mouseenter', (e) => onCellHover(r, c));
+                    bubble.addEventListener('mouseleave', () => clearHighlights());
+                    bubble.addEventListener('mousedown', (e) => onCellClick(r, c));
+                    bubble.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        onCellTouch(r, c);
+                    });
+                }
+                rowDiv.appendChild(bubble);
+            }
+            gridEl.appendChild(rowDiv);
+        }
+    }
+
+    function formatMult(m) {
+        if (m % 1 === 0) return m + 'x';
+        return m.toFixed(1) + 'x';
+    }
+
+    function getTargets(row, col) {
+        const targets = [];
+        const cell = gridData[row]?.[col];
+        if (!cell || cell.isDestroyed) return targets;
+
+        switch (currentWeapon) {
+            case 0: targets.push({row, col}); break;
+            case 1: 
+                if (gridData[row][col-1] && !gridData[row][col-1].isDestroyed) targets.push({row, col: col-1});
+                targets.push({row, col});
+                if (gridData[row][col+1] && !gridData[row][col+1].isDestroyed) targets.push({row, col: col+1});
+                break;
+            case 2: targets.push(...getChainTargets(row, col)); break;
+            case 3: targets.push(...getExplosionTargets(row, col)); break;
+            case 4: targets.push(...getRayTargets(row, col)); break;
+        }
+        return targets;
+    }
+
+    // Updated Neighbors for Matrix Grid (Up, Down, Left, Right)
+    function getMatrixNeighbors(row, col) {
+        const neighbors = [];
+        // Up
+        if (row > 0) neighbors.push({row: row-1, col: col});
+        // Down
+        if (row < GRID_ROWS - 1) neighbors.push({row: row+1, col: col});
+        // Left
+        if (col > 0) neighbors.push({row: row, col: col-1});
+        // Right
+        if (col < GRID_COLS - 1) neighbors.push({row: row, col: col+1});
+        return neighbors;
+    }
+
+    function getChainTargets(startRow, startCol) {
+        const targets = [];
+        const visited = new Set();
+        const startKey = `${startRow},${startCol}`;
+        visited.add(startKey);
+        
+        targets.push({row: startRow, col: startCol, parent: null});
+        let potentialParents = [{row: startRow, col: startCol}];
+        
+        const maxTargets = 8 + Math.floor(Math.random() * 8); // 8 to 16 hits
+        
+        while (targets.length < maxTargets && potentialParents.length > 0) {
+            const pIdx = Math.floor(Math.random() * potentialParents.length);
+            const parent = potentialParents[pIdx];
+            
+            const neighbors = getMatrixNeighbors(parent.row, parent.col);
+            neighbors.sort(() => Math.random() - 0.5);
+            
+            let found = false;
+            for (let n of neighbors) {
+                const key = `${n.row},${n.col}`;
+                const cell = gridData[n.row]?.[n.col];
+                
+                if (!visited.has(key) && cell && !cell.isDestroyed) {
+                    visited.add(key);
+                    const newNode = {row: n.row, col: n.col, parent: {row: parent.row, col: parent.col}};
+                    targets.push(newNode);
+                    potentialParents.push(newNode);
+                    found = true;
+                    break; 
+                }
+            }
+            if (!found) potentialParents.splice(pIdx, 1);
+        }
+        return targets;
+    }
+
+    function getExplosionTargets(row, col) {
+        const results = [];
+        // 3x3 Block
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const r = row + dr;
+                const c = col + dc;
+                if (r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
+                    const cell = gridData[r][c];
+                    if (cell && !cell.isDestroyed) results.push({row: r, col: c});
+                }
+            }
+        }
+        return results;
+    }
+
+    // FIXED: getRayTargets now uses getLogicalPos to ensure ray hits targets correctly
+    function getRayTargets(row, col) {
+        const results = [];
+        const turretRect = document.getElementById('shipMain').querySelector('.turret-head').getBoundingClientRect();
+        const viewportRect = gameViewport.getBoundingClientRect();
+        const scaleX = 1920 / viewportRect.width;
+        
+        // Calculate turret center in logical coordinates
+        const turretX = ((turretRect.left + turretRect.width * 0.5) - viewportRect.left) * scaleX;
+        const turretY = ((turretRect.top + turretRect.height * 0.3) - viewportRect.top) * scaleX; 
+        
+        const clickedEl = getBubbleEl(row, col);
+        if (!clickedEl) return results;
+        const clickedPos = getLogicalPos(clickedEl);
+        
+        const dx = clickedPos.x - turretX;
+        const dy = clickedPos.y - turretY;
+        const beamLength = Math.sqrt(dx * dx + dy * dy);
+        const dirX = dx / beamLength;
+        const dirY = dy / beamLength;
+        const beamWidth = 240; 
+        
+        for (let r = 0; r < GRID_ROWS; r++) {
+            for (let c = 0; c < GRID_COLS; c++) {
+                const cell = gridData[r][c];
+                if (!cell || cell.isDestroyed) continue;
+                const el = getBubbleEl(r, c);
+                if (!el) continue;
+                const pos = getLogicalPos(el);
+                const toCellX = pos.x - turretX;
+                const toCellY = pos.y - turretY;
+                const projection = toCellX * dirX + toCellY * dirY;
+                if (projection < 0 || projection > beamLength + 200) continue;
+                const perpX = toCellX - projection * dirX;
+                const perpY = toCellY - projection * dirY;
+                const perpDist = Math.sqrt(perpX * perpX + perpY * perpY);
+                if (perpDist < beamWidth / 2) results.push({row: r, col: c});
+            }
+        }
+        return results;
+    }
+
+    function onCellHover(row, col) {
+        clearHighlights();
+        const targets = getTargets(row, col);
+        hoveredTargets = targets;
+        lastHoveredCell = {row, col};
+
+        targets.forEach(t => {
+            const el = getBubbleEl(t.row, t.col);
+            if (el) el.classList.add('highlight-target');
+        });
+
+        if (currentWeapon === 3 && targets.length > 0) {
+            const centerEl = getBubbleEl(row, col);
+            if (centerEl) {
+                const pos = getLogicalPos(centerEl);
+                const radius = 100;
+                const aoeCircle = document.createElement('div');
+                aoeCircle.className = 'aoe-indicator';
+                aoeCircle.style.left = (pos.x - radius) + 'px';
+                aoeCircle.style.top = (pos.y - radius) + 'px';
+                aoeCircle.style.width = (radius * 2) + 'px';
+                aoeCircle.style.height = (radius * 2) + 'px';
+                gameViewport.appendChild(aoeCircle);
+            }
+        }
+
+        if (targets.length > 0) {
+            const lastTarget = targets[targets.length - 1];
+            const el = getBubbleEl(lastTarget.row, lastTarget.col);
+            if (el) {
+                const pos = getLogicalPos(el);
+                betsTooltip.style.display = 'block';
+                betsTooltip.style.left = pos.x + 'px';
+                betsTooltip.style.top = (pos.y + 35) + 'px'; // Adjusted offset
+                betsTooltip.style.transform = 'translateX(-50%)';
+                betsTooltip.textContent = `${targets.length} Bet${targets.length > 1 ? 's' : ''}`;
+            }
+        }
+    }
+
+    function clearHighlights() {
+        document.querySelectorAll('.highlight-target').forEach(el => el.classList.remove('highlight-target'));
+        const existingAOE = document.querySelector('.aoe-indicator');
+        if (existingAOE) existingAOE.remove();
+        betsTooltip.style.display = 'none';
+        hoveredTargets = [];
+    }
+
+    function getBubbleEl(row, col) {
+        return gridEl.querySelector(`.enemy-bubble[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    function onCellTouch(row, col) {
+        initAudio();
+        const targets = getTargets(row, col);
+        if (targets.length === 0) return;
+
+        const key = `${row},${col}`;
+        if (isMobileTapOne && mobileTapTargets.join('|') === targets.map(t=>`${t.row},${t.col}`).join('|')) {
+            isMobileTapOne = false;
+            clearHighlights();
+            executeAttack(targets);
+        } else {
+            clearHighlights();
+            isMobileTapOne = true;
+            mobileTapTargets = targets.map(t => `${t.row},${t.col}`);
+            targets.forEach(t => {
+                const el = getBubbleEl(t.row, t.col);
+                if (el) el.classList.add('highlight-target');
+            });
+            const el = getBubbleEl(row, col);
+            if (el) {
+                const pos = getLogicalPos(el);
+                betsTooltip.style.display = 'block';
+                betsTooltip.style.left = pos.x + 'px';
+                betsTooltip.style.top = (pos.y + 35) + 'px';
+                betsTooltip.style.transform = 'translateX(-50%)';
+                betsTooltip.textContent = `${targets.length} Bet${targets.length > 1 ? 's' : ''}`;
+            }
+        }
+    }
+
+    function onCellClick(row, col) {
+        initAudio();
+        let targets;
+        if (lastHoveredCell && lastHoveredCell.row === row && lastHoveredCell.col === col && hoveredTargets.length > 0) {
+            targets = hoveredTargets;
+        } else {
+            targets = getTargets(row, col);
+        }
+
+        if (targets.length === 0) return;
+        clearHighlights();
+        executeAttack(targets);
+    }
+
+    function executeAttack(targets) {
+        const totalCost = bet * targets.length;
+        if (balance < totalCost) {
+            showFloatTextAtCenter('NOT ENOUGH BALANCE', '#ff4444');
+            return;
+        }
+
+        balance -= totalCost;
+
+        // Animate all active turrets
+        const turretHeads = document.querySelectorAll('.turret-head');
+        turretHeads.forEach((head, index) => {
+             // Only animate visible ships
+             if (index === 0 && activeShips >= 2) head.classList.add('recoil-anim'); // Left
+             if (index === 1) head.classList.add('recoil-anim'); // Main
+             if (index === 2 && activeShips >= 3) head.classList.add('recoil-anim'); // Right
+             
+             // Remove class after animation to allow re-trigger
+             setTimeout(() => head.classList.remove('recoil-anim'), 100);
+        });
+
+        SoundManager.playShoot(currentWeapon);
+        screenShake.intensity = 5;
+        
+        // Calculate Target Centroid for Angle Logic
+        let sumX = 0, sumY = 0, count = 0;
+        targets.forEach(t => {
+            const el = getBubbleEl(t.row, t.col);
+            if (el) {
+                const pos = getLogicalPos(el);
+                sumX += pos.x;
+                sumY += pos.y;
+                count++;
+            }
+        });
+        
+        let targetX = sumX / count;
+        let targetY = sumY / count;
+
+        // FIRE FROM ALL ACTIVE SHIPS
+        const ships = [
+             { id: 'shipMain', visible: true },
+             { id: 'shipLeft', visible: activeShips >= 2 },
+             { id: 'shipRight', visible: activeShips >= 3 }
+        ];
+
+        const viewportRect = gameViewport.getBoundingClientRect();
+        const scaleX = 1920 / viewportRect.width;
+
+        ships.forEach(shipInfo => {
+            if (!shipInfo.visible) return;
+            
+            const shipEl = document.getElementById(shipInfo.id);
+            const turretRect = shipEl.querySelector('.turret-head').getBoundingClientRect();
+            
+            // Pivot in logical coords
+            const pivotX = ((turretRect.left + turretRect.width * 0.5) - viewportRect.left) * scaleX;
+            const pivotY = ((turretRect.top + turretRect.height * 0.7) - viewportRect.top) * scaleX;
+
+            const angleRad = Math.atan2(targetY - pivotY, targetX - pivotX);
+
+            // Fire visual effect from this ship's pivot
+             if (currentWeapon === 2) {
+                fireChainLightningVFX(pivotX, pivotY, targets, angleRad, () => { if(shipInfo.id === 'shipMain') resolveHits(targets); });
+            } else if (currentWeapon === 3) {
+                fireMegaBombVFX(pivotX, pivotY, targets, angleRad, () => { if(shipInfo.id === 'shipMain') resolveHits(targets); });
+            } else if (currentWeapon === 4) {
+                fireDeathStarBeamVFX(pivotX, pivotY, targets, angleRad, () => { if(shipInfo.id === 'shipMain') resolveHits(targets); });
+            } else {
+                fireProjectilesVFX(pivotX, pivotY, targets, angleRad, () => { if(shipInfo.id === 'shipMain') resolveHits(targets); });
+            }
+        });
+    }
+    
+    // Updated aim function to rotate all active turrets
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX; mouseY = e.clientY;
+        cursor.style.left = mouseX + 'px'; cursor.style.top = mouseY + 'px';
+        
+        targetRelMouseX = (mouseX / window.innerWidth - 0.5) * 2;
+        targetRelMouseY = (mouseY / window.innerHeight - 0.5) * 2;
+
+        const ships = [
+             { id: 'shipMain', visible: true },
+             { id: 'shipLeft', visible: activeShips >= 2 },
+             { id: 'shipRight', visible: activeShips >= 3 }
+        ];
+
+        ships.forEach(shipInfo => {
+            if (!shipInfo.visible) return;
+            const shipEl = document.getElementById(shipInfo.id);
+            const head = shipEl.querySelector('.turret-head');
+            
+            const tr = head.getBoundingClientRect();
+            const pivotX = tr.left + tr.width * 0.5;
+            const pivotY = tr.top + tr.height * 0.7;
+            
+            const dx = mouseX - pivotX;
+            const dy = mouseY - pivotY;
+            const deg = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+            
+            head.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
+            head.style.setProperty('--angle', deg + 'deg');
+        });
+    });
+
+    function rollDice(multiplier) {
+        const winChance = 98 / multiplier; 
+        const roll = Math.random() * 100;
+        return roll < winChance;
+    }
+
+    function resolveHits(targets) {
+        let totalWin = 0;
+        let anyWin = false;
+        
+        targets.forEach(t => {
+            const cell = gridData[t.row]?.[t.col];
+            if (!cell || cell.isDestroyed) return;
+
+            const won = rollDice(cell.multiplier);
+            const payout = won ? bet * cell.multiplier : 0;
+            
+            const el = getBubbleEl(t.row, t.col);
+            if (!el) return;
+
+            if (won) {
+                totalWin += payout;
+                anyWin = true;
+                cell.isDestroyed = true;
+                destroyedCount++;
+
+                const pos = getLogicalPos(el);
+                spawnParticles(pos.x, pos.y, cell.color, 15);
+                createExplosion(el);
+                
+                // Hide bubble immediately
+                el.style.visibility = 'hidden';
+                el.style.pointerEvents = 'none';
+                
+            } else {
+                // Show Shield Effect
+                const shield = document.createElement('div');
+                shield.className = 'shield-effect';
+                el.appendChild(shield);
+                setTimeout(() => shield.remove(), 400);
+            }
+        });
+
+        updateCounter();
+
+        if (totalWin > 0) {
+            balance += totalWin;
+            SoundManager.playWin();
+            const centerEl = getBubbleEl(targets[Math.floor(targets.length/2)].row, targets[Math.floor(targets.length/2)].col);
+            if (centerEl) {
+                showWinTotal(centerEl, totalWin);
+            }
+        }
+
+        if (anyWin) {
+            SoundManager.playExplosion();
+            screenShake.intensity = 15;
+            
+            if (totalWin > bet * 10) {
+                gameViewport.classList.add('glitch-active');
+                setTimeout(() => gameViewport.classList.remove('glitch-active'), 150);
+            }
+            
+            // Check for Total Wipeout (Respawn Condition)
+            checkAllDestroyed();
+        }
+    }
+    
+    function checkAllDestroyed() {
+        const allDestroyed = gridData.every(row => row.every(cell => cell.isDestroyed));
+        if (allDestroyed) {
+            // Level cleared!
+            
+            // Check fleet upgrade
+            if (activeShips < 3) {
+                activeShips++;
+                updateShipsVisibility();
+                showFloatTextAtCenter("FLEET UPGRADED!", "#00ff66");
+            }
+            
+            setTimeout(() => {
+                initGrid(); // Respawn full grid
+            }, 1000);
+        }
+    }
+    
+    function updateShipsVisibility() {
+        if (activeShips >= 2) document.getElementById('shipLeft').classList.add('active');
+        if (activeShips >= 3) document.getElementById('shipRight').classList.add('active');
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        initAudio();
+        initGrid();
+    });
+
+    // --- COORDINATE SYSTEM FIX (CRITICAL) ---
+    // Returns {x, y} relative to the 1920x1080 gameViewport
+    function getLogicalPos(el) {
+        const rect = el.getBoundingClientRect();
+        const vpRect = gameViewport.getBoundingClientRect();
+        const scale = 1920 / vpRect.width;
+        
+        return {
+            x: (rect.left + rect.width / 2 - vpRect.left) * scale,
+            y: (rect.top + rect.height / 2 - vpRect.top) * scale
+        };
+    }
+
+    // UPDATED VFX: Now takes angleRad directly to ensure sync with rotation
+    function fireProjectilesVFX(sx, sy, targets, angleRad, callback) {
+        let completed = 0;
+        const total = targets.length;
+        // sx, sy are pivot coordinates passed in
+        const barrelLen = 70; 
+        const muzzleX = sx + Math.cos(angleRad) * barrelLen;
+        const muzzleY = sy + Math.sin(angleRad) * barrelLen;
+
+        targets.forEach((t, i) => {
+            const el = getBubbleEl(t.row, t.col);
+            if (!el) { completed++; if(completed>=total) callback(); return; }
+            const to = getLogicalPos(el);
+            setTimeout(() => {
+                if (currentWeapon !== 3) drawLaserLine(muzzleX, muzzleY, to.x, to.y);
+                spawnProjectile(muzzleX, muzzleY, to.x, to.y, currentWeapon === 3, () => {
+                    completed++; if(completed>=total) callback();
+                });
+            }, i * 50);
+        });
+    }
+
+    function spawnProjectile(x, y, tx, ty, isBomb, callback) {
+        const proj = document.createElement('div');
+        proj.className = 'projectile';
+        const weaponColors = {
+            0: { bg: '#0080ff', shadow: '0 0 10px #0080ff, 0 0 20px #4040ff' },
+            1: { bg: '#ffcc00', shadow: '0 0 10px #ffcc00, 0 0 20px #ffff44' },
+            3: { bg: '#ff0000', shadow: '0 0 15px #ff0000, 0 0 30px #ff6600' }
+        };
+        const weaponColor = weaponColors[currentWeapon] || weaponColors[0];
+        if (isBomb) {
+            proj.style.background = weaponColor.bg;
+            proj.style.boxShadow = weaponColor.shadow;
+            proj.style.width = '14px'; proj.style.height = '14px'; proj.style.borderRadius = '50%';
+        } else {
+            proj.style.background = weaponColor.bg;
+            proj.style.boxShadow = weaponColor.shadow;
+        }
+        gameViewport.appendChild(proj);
+        proj.style.left = x + 'px'; proj.style.top = y + 'px';
+        const dx = tx - x; const dy = ty - y;
+        const angle = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+        proj.style.transform = `rotate(${angle}deg)`;
+        const duration = isBomb ? 300 : 150;
+        const start = performance.now();
+        function fly(time) {
+            const p = (time - start) / duration;
+            if (p < 1) {
+                proj.style.left = (x + dx * p) + 'px';
+                proj.style.top = (y + dy * p) + 'px';
+                requestAnimationFrame(fly);
+            } else {
+                proj.remove();
+                if (isBomb) {
+                    const blast = document.createElement('div');
+                    blast.className = 'bomb-area';
+                    blast.style.width = '180px'; blast.style.height = '180px';
+                    blast.style.left = tx + 'px'; blast.style.top = ty + 'px';
+                    gameViewport.appendChild(blast);
+                    setTimeout(() => blast.remove(), 400);
+                }
+                callback();
+            }
+        }
+        requestAnimationFrame(fly);
+    }
+
+    function drawLaserLine(x1, y1, x2, y2) {
+        const dx = x2 - x1; const dy = y2 - y1;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        const angle = Math.atan2(dy, dx);
+        const weaponLaserColors = {
+            0: { glowBg: 'linear-gradient(90deg, rgba(0,128,255,0.9), rgba(64,160,255,0.6) 80%, transparent)', glowShadow: '0 0 15px #0080ff, 0 0 30px rgba(0,128,255,0.4)', coreBg: 'linear-gradient(90deg, #fff, rgba(200,220,255,0.9) 80%, transparent)' },
+            1: { glowBg: 'linear-gradient(90deg, rgba(255,204,0,0.9), rgba(255,220,100,0.6) 80%, transparent)', glowShadow: '0 0 15px #ffcc00, 0 0 30px rgba(255,204,0,0.4)', coreBg: 'linear-gradient(90deg, #fff, rgba(255,240,200,0.9) 80%, transparent)' },
+            3: { glowBg: 'linear-gradient(90deg, rgba(255,0,0,0.9), rgba(255,100,0,0.6) 80%, transparent)', glowShadow: '0 0 15px #ff0000, 0 0 30px rgba(255,0,0,0.4)', coreBg: 'linear-gradient(90deg, #fff, rgba(255,200,200,0.9) 80%, transparent)' }
+        };
+        const laserColor = weaponLaserColors[currentWeapon] || weaponLaserColors[0];
+        const glow = document.createElement('div');
+        glow.style.cssText = `position:absolute; left:${x1}px; top:${y1}px; width:${len}px; height:12px; transform-origin:0 50%; transform:rotate(${angle}rad) translateY(-50%); background:${laserColor.glowBg}; box-shadow:${laserColor.glowShadow}; border-radius:6px; pointer-events:none; z-index:23; mix-blend-mode:screen;`;
+        gameViewport.appendChild(glow);
+        const core = document.createElement('div');
+        core.style.cssText = `position:absolute; left:${x1}px; top:${y1}px; width:${len}px; height:4px; transform-origin:0 50%; transform:rotate(${angle}rad) translateY(-50%); background:${laserColor.coreBg}; border-radius:2px; pointer-events:none; z-index:24; mix-blend-mode:screen;`;
+        gameViewport.appendChild(core);
+        const flash = document.createElement('div');
+        flash.style.cssText = `position:absolute; left:${x1}px; top:${y1}px; width:30px; height:30px; transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle, #fff 20%, #00ccff 50%, transparent 70%); pointer-events:none; z-index:25; mix-blend-mode:screen;`;
+        gameViewport.appendChild(flash);
+        setTimeout(() => { glow.style.opacity='0'; glow.style.transition='opacity 0.12s'; }, 50);
+        setTimeout(() => { core.style.opacity='0'; core.style.transition='opacity 0.1s'; }, 40);
+        setTimeout(() => { flash.style.opacity='0'; flash.style.transition='opacity 0.15s'; }, 30);
+        setTimeout(() => { glow.remove(); core.remove(); flash.remove(); }, 200);
+    }
+
+    function fireChainLightningVFX(sx, sy, targets, angleRad, callback) {
+        if (targets.length === 0) { callback(); return; }
+        
+        const barrelLen = 70;
+        const muzzleX = sx + Math.cos(angleRad) * barrelLen;
+        const muzzleY = sy + Math.sin(angleRad) * barrelLen;
+        
+        let i = 0;
+        function drawNext() {
+            if (i >= targets.length) { setTimeout(callback, 200); return; }
+            
+            const t = targets[i];
+            const el = getBubbleEl(t.row, t.col);
+            
+            if (el) {
+                const to = getLogicalPos(el);
+                let fromPoint = {x: muzzleX, y: muzzleY};
+
+                if (t.parent) {
+                    const parentEl = getBubbleEl(t.parent.row, t.parent.col);
+                    if (parentEl) fromPoint = getLogicalPos(parentEl);
+                }
+                
+                drawLightningSegment(fromPoint.x, fromPoint.y, to.x, to.y);
+                
+                const flash = document.createElement('div');
+                flash.style.cssText = `position:absolute; left:${to.x}px; top:${to.y}px; width:40px; height:40px; transform:translate(-50%,-50%); background:radial-gradient(circle, #fff, transparent); opacity:0.8; z-index:50; pointer-events:none; mix-blend-mode:screen;`;
+                gameViewport.appendChild(flash);
+                setTimeout(() => flash.remove(), 100);
+            }
+            
+            i++;
+            setTimeout(drawNext, 50); 
+        }
+        drawNext();
+    }
+
+    function drawLightningSegment(x1, y1, x2, y2) {
+        const svg = lightningLayer;
+        
+        const getJaggedPoints = (sx, sy, ex, ey, segments) => {
+            const pts = [{x: sx, y: sy}];
+            const dx = ex - sx;
+            const dy = ey - sy;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const angle = Math.atan2(dy, dx);
+            
+            for (let i = 1; i < segments; i++) {
+                const t = i / segments;
+                let px = sx + dx * t;
+                let py = sy + dy * t;
+                const offsetAmt = Math.random() * 20 - 10;
+                px += Math.cos(angle + Math.PI/2) * offsetAmt;
+                py += Math.sin(angle + Math.PI/2) * offsetAmt;
+                pts.push({x: px, y: py});
+            }
+            pts.push({x: ex, y: ey});
+            return pts;
+        };
+
+        const dist = Math.hypot(x2 - x1, y2 - y1);
+        const steps = Math.max(4, Math.floor(dist / 20)); 
+        const mainPoints = getJaggedPoints(x1, y1, x2, y2, steps);
+
+        const createPath = (pts, width, opacity, color) => {
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            let d = `M${pts[0].x} ${pts[0].y}`;
+            for(let i=1; i<pts.length; i++) d += ` L${pts[i].x} ${pts[i].y}`;
+            path.setAttribute("d", d);
+            path.style.stroke = color;
+            path.style.strokeWidth = width;
+            path.style.strokeLinecap = "round";
+            path.style.strokeLinejoin = "round";
+            path.style.fill = "none";
+            path.style.filter = `drop-shadow(0 0 ${width*2}px ${color})`;
+            path.style.opacity = opacity;
+            path.style.transition = "opacity 0.1s"; 
+            svg.appendChild(path);
+            return path;
+        };
+
+        const glowColor = "#00ff66"; 
+        const mainPath = createPath(mainPoints, 3, 1, glowColor);
+        const corePath = createPath(mainPoints, 1, 1, "#ffffff");
+
+        setTimeout(() => {
+            mainPath.style.opacity = 0;
+            corePath.style.opacity = 0;
+            setTimeout(() => {
+                mainPath.remove();
+                corePath.remove();
+            }, 100);
+        }, 150 + Math.random() * 100);
+    }
+
+    function fireMegaBombVFX(sx, sy, targets, angleRad, callback) {
+        if (targets.length === 0) { callback(); return; }
+        
+        const barrelLen = 70;
+        const muzzleX = sx + Math.cos(angleRad) * barrelLen;
+        const muzzleY = sy + Math.sin(angleRad) * barrelLen;
+        
+        let sumX = 0, sumY = 0, count = 0;
+        targets.forEach(t => {
+            const el = getBubbleEl(t.row, t.col);
+            if (el) { const pos = getLogicalPos(el); sumX += pos.x; sumY += pos.y; count++; }
+        });
+        if (count === 0) { callback(); return; }
+        const targetX = sumX / count;
+        const targetY = sumY / count;
+        
+        const megaBomb = document.createElement('div');
+        megaBomb.style.cssText = `position: absolute; left: ${muzzleX}px; top: ${muzzleY}px; width: 60px; height: 60px; border-radius: 50%; background: radial-gradient(circle, #fff, #ff8800, #ff0000); box-shadow: 0 0 20px #ff0000, 0 0 40px #ff4400, 0 0 80px rgba(255, 0, 0, 0.5); z-index: 40; transform: translate(-50%, -50%); mix-blend-mode: screen;`;
+        const innerCore = document.createElement('div');
+        innerCore.style.cssText = `width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from 0deg, transparent, rgba(255,255,255,0.8), transparent); animation: spinReticle 0.5s linear infinite;`;
+        megaBomb.appendChild(innerCore);
+        gameViewport.appendChild(megaBomb);
+        
+        const dist = Math.hypot(targetX - muzzleX, targetY - muzzleY);
+        const speed = 1.5; 
+        const duration = dist / speed * 1.5;
+        const start = performance.now();
+        function fly(time) {
+            let p = (time - start) / duration;
+            if (p > 1) p = 1;
+            const curX = muzzleX + (targetX - muzzleX) * p;
+            const curY = muzzleY + (targetY - muzzleY) * p;
+            megaBomb.style.left = curX + 'px';
+            megaBomb.style.top = curY + 'px';
+            if (p < 1) requestAnimationFrame(fly);
+            else {
+                megaBomb.remove();
+                const flash = document.createElement('div');
+                flash.style.cssText = `position: absolute; left: ${targetX}px; top: ${targetY}px; width: 10px; height: 10px; border-radius: 50%; background: white; box-shadow: 0 0 100px 50px white; z-index: 50; transform: translate(-50%, -50%); animation: flash 0.1s forwards;`;
+                gameViewport.appendChild(flash);
+                setTimeout(() => flash.remove(), 100);
+                const ring = document.createElement('div');
+                ring.style.cssText = `position: absolute; left: ${targetX}px; top: ${targetY}px; width: 20px; height: 20px; border-radius: 50%; border: 20px solid rgba(255, 100, 50, 0.8); box-shadow: 0 0 50px #ff0000; z-index: 45; transform: translate(-50%, -50%); mix-blend-mode: screen; animation: bfgRing 0.6s ease-out forwards;`;
+                gameViewport.appendChild(ring);
+                setTimeout(() => ring.remove(), 600);
+                const megaBlast = document.createElement('div');
+                megaBlast.style.cssText = `position:absolute; left:${targetX}px; top:${targetY}px; width:300px; height:300px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,200,50,0.9) 20%, rgba(255,50,0,0.8) 50%, transparent 70%); transform:translate(-50%, -50%) scale(0.1); pointer-events:none; z-index:40; mix-blend-mode:screen; animation: megaBombExplode 0.5s ease-out forwards;`;
+                gameViewport.appendChild(megaBlast);
+                setTimeout(() => megaBlast.remove(), 500);
+                setTimeout(callback, 200);
+            }
+        }
+        requestAnimationFrame(fly);
+    }
+
+    function fireDeathStarBeamVFX(sx, sy, targets, angleRad, callback) {
+        if (targets.length === 0) { callback(); return; }
+        const fromPt = {x: sx, y: sy};
+        
+        const barrelLen = 70; 
+        const muzzleX = sx + Math.cos(angleRad) * barrelLen;
+        const muzzleY = sy + Math.sin(angleRad) * barrelLen;
+        
+        let maxDist = 0;
+        targets.forEach(t => {
+             const el = getBubbleEl(t.row, t.col);
+             if (el) {
+                 const pos = getLogicalPos(el);
+                 const d = Math.hypot(pos.x - muzzleX, pos.y - muzzleY);
+                 if (d > maxDist) maxDist = d;
+             }
+        });
+        
+        const extendedDistance = maxDist + 1000; 
+        const beamHeight = 320; 
+        const angleDeg = angleRad * 180 / Math.PI;
+
+        const muzzleFlash = document.createElement('div');
+        muzzleFlash.style.cssText = `position: absolute; left: ${muzzleX}px; top: ${muzzleY}px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, #fff 20%, #cc00ff 60%, transparent 70%); transform: translate(-50%, -50%) scale(0); z-index: 50; mix-blend-mode: screen; animation: explodeAnim 0.3s ease-out forwards;`;
+        gameViewport.appendChild(muzzleFlash);
+        setTimeout(() => muzzleFlash.remove(), 300);
+        const beamContainer = document.createElement('div');
+        beamContainer.style.cssText = `position:absolute; left:${muzzleX}px; top:${muzzleY - beamHeight/2}px; width:${extendedDistance}px; height:${beamHeight}px; transform-origin: 0% 50%; transform: rotate(${angleDeg}deg); pointer-events:none; z-index:45; mix-blend-mode:screen;`;
+        const aura = document.createElement('div');
+        aura.style.cssText = `position:absolute; inset:-50px; background: linear-gradient(90deg, rgba(100,0,255,0) 0%, rgba(180,50,255,0.4) 10%, rgba(0,255,255,0.3) 50%, rgba(180,50,255,0.4) 90%, rgba(100,0,255,0) 100%); filter: blur(40px); animation: beamPulse 0.5s infinite;`;
+        beamContainer.appendChild(aura);
+        const mainBeam = document.createElement('div');
+        mainBeam.style.cssText = `position:absolute; top: 20%; bottom: 20%; left:0; right:0; background: linear-gradient(90deg, transparent 0%, rgba(200,100,255,0.9) 5%, rgba(255,255,255,1) 50%, rgba(200,100,255,0.9) 95%, transparent 100%); box-shadow: 0 0 40px #aa00ff, inset 0 0 20px #fff; animation: beamCharge 0.1s ease-out;`;
+        beamContainer.appendChild(mainBeam);
+        const core = document.createElement('div');
+        core.style.cssText = `position:absolute; top: 42%; bottom: 42%; left:0; right:0; background: #fff; box-shadow: 0 0 20px #fff, 0 0 40px #00ffff; animation: beamCharge 0.1s ease-out;`;
+        beamContainer.appendChild(core);
+        for(let i=0; i<3; i++) {
+            const spiral = document.createElement('div');
+            spiral.style.cssText = `position: absolute; top: 50%; left: 0; width: 100%; height: 60px; border-top: 2px solid rgba(0,255,255,0.8); border-bottom: 2px solid rgba(255,0,255,0.8); border-radius: 50%; transform: translateY(-50%) scaleY(${0.5 + i * 0.5}); opacity: 0.6; filter: blur(2px);`;
+            beamContainer.appendChild(spiral);
+        }
+        gameViewport.appendChild(beamContainer);
+        setTimeout(() => { beamContainer.style.opacity = '0'; beamContainer.style.transition = 'opacity 0.4s'; }, 300);
+        setTimeout(() => { beamContainer.remove(); callback(); }, 700);
+    }
+
+    function createExplosion(el) {
+        const pt = getLogicalPos(el);
+        const expl = document.createElement('div');
+        expl.className = 'explosion';
+        expl.style.left = pt.x + 'px'; expl.style.top = pt.y + 'px';
+        gameViewport.appendChild(expl);
+        setTimeout(() => expl.remove(), 350);
+    }
+
+    function showFloatText(el, text, color) {
+        const pt = getLogicalPos(el);
+        const float = document.createElement('div');
+        float.innerText = text;
+        float.style.cssText = `position:absolute; left:${pt.x}px; top:${pt.y - 30}px; color:${color}; font-weight:900; font-size:13px; font-family:'Orbitron',sans-serif; text-shadow:0 0 6px ${color}; pointer-events:none; z-index:200; transform:translateX(-50%); transition:transform 0.8s, opacity 0.8s;`;
+        gameViewport.appendChild(float);
+        requestAnimationFrame(() => { float.style.transform = 'translateX(-50%) translateY(-40px)'; float.style.opacity = '0'; });
+        setTimeout(() => float.remove(), 800);
+    }
+
+    function showWinTotal(el, total) {
+        const pos = getLogicalPos(el);
+        const popup = document.createElement('div');
+        popup.className = 'big-win-popup';
+        popup.innerText = `WIN: $${total.toFixed(2)}`;
+        popup.style.left = pos.x + 'px';
+        popup.style.top = pos.y + 'px';
+        popup.style.transform = 'translate(-50%, -50%)';
+        gameViewport.appendChild(popup);
+        setTimeout(() => popup.remove(), 1000);
+    }
+
+    function showFloatTextAtCenter(text, color) {
+        const float = document.createElement('div');
+        float.innerText = text;
+        float.style.cssText = `position:absolute; left:50%; top:40%; color:${color}; font-weight:900; font-size:20px; font-family:'Orbitron',sans-serif; text-shadow:0 0 10px ${color}; pointer-events:none; z-index:300; transform:translateX(-50%); transition:opacity 1s;`;
+        gameViewport.appendChild(float);
+        setTimeout(() => { float.style.opacity = '0'; }, 100);
+        setTimeout(() => float.remove(), 1200);
+    }
+
+    function selectWeapon(index) {
+        initAudio();
+        currentWeapon = index;
+        const btns = document.querySelectorAll('.weapon-btn');
+        btns.forEach((btn) => {
+            const btnId = parseInt(btn.getAttribute('data-id'));
+            if (btnId === index) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+        clearHighlights();
+    }
+
+    function adjustBet(action) {
+        if (action === 'half') bet = Math.max(0.10, bet / 2);
+        else if (action === 'double') bet = Math.min(500, bet * 2);
+        else bet = Math.max(0.10, bet + action);
+        bet = Math.round(bet * 100) / 100;
+        betEl.innerText = bet.toFixed(2);
+    }
+
+    function updateBalance() {
+        // balanceEl.innerText = balance.toLocaleString('en-US', {minimumFractionDigits: 2}); // Handled by updateVFX
+    }
+
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX; mouseY = e.clientY;
+        cursor.style.left = mouseX + 'px'; cursor.style.top = mouseY + 'px';
+        
+        targetRelMouseX = (mouseX / window.innerWidth - 0.5) * 2;
+        targetRelMouseY = (mouseY / window.innerHeight - 0.5) * 2;
+
+        const ships = [
+             { id: 'shipMain', visible: true },
+             { id: 'shipLeft', visible: activeShips >= 2 },
+             { id: 'shipRight', visible: activeShips >= 3 }
+        ];
+
+        ships.forEach(shipInfo => {
+            if (!shipInfo.visible) return;
+            const shipEl = document.getElementById(shipInfo.id);
+            const head = shipEl.querySelector('.turret-head');
+            
+            const tr = head.getBoundingClientRect();
+            const pivotX = tr.left + tr.width * 0.5;
+            const pivotY = tr.top + tr.height * 0.7;
+            
+            const dx = mouseX - pivotX;
+            const dy = mouseY - pivotY;
+            const deg = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+            
+            head.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
+            head.style.setProperty('--angle', deg + 'deg');
+        });
+    });
+
+    function scaleViewport() {
+        const fw = gameFrame.clientWidth;
+        const fh = gameFrame.clientHeight;
+        const scale = Math.min(fw / 1920, fh / 1080);
+        gameViewport.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('resize', scaleViewport);
+    scaleViewport();
+
+    // --- BACKGROUND VFX ---
+    (function() {
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        const W = 1920, H = 1080;
+        
+        let stars = [];
+        let nebulas = [];
+        let comets = [];
+        let asteroids = [];
+
+        function initBackground() {
+            canvas.width = W; canvas.height = H;
+            
+            for(let i=0; i<300; i++) stars.push({
+                x: Math.random()*W, y: Math.random()*H,
+                r: Math.random()*1.5 + 0.5,
+                s: Math.random()*0.2 + 0.05, 
+                a: Math.random() * Math.PI * 2, 
+                ts: Math.random() * 0.02 + 0.005, 
+                baseAlpha: Math.random() * 0.4 + 0.1 
+            });
+
+            nebulas.push({x: 200, y: 300, r: 600, color: 'rgba(76, 29, 149, 0.15)', vx: 0.1, vy: 0.05});
+            nebulas.push({x: 1600, y: 800, r: 500, color: 'rgba(13, 148, 136, 0.12)', vx: -0.1, vy: -0.05});
+            nebulas.push({x: 900, y: 500, r: 700, color: 'rgba(192, 38, 211, 0.08)', vx: 0.05, vy: 0.02});
+
+            for(let i=0; i<12; i++) {
+                asteroids.push({
+                    x: Math.random() * W,
+                    y: Math.random() * H,
+                    r: Math.random() * 30 + 15,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                    angle: Math.random() * Math.PI * 2,
+                    spin: (Math.random() - 0.5) * 0.015,
+                    shape: Array.from({length: 8}, () => Math.random() * 0.3 + 0.7)
+                });
+            }
+        }
+
+        function drawBackground() {
+            ctx.clearRect(0,0,W,H);
+
+            const pX = -currentRelMouseX * 30;
+            const pY = -currentRelMouseY * 30;
+
+            nebulas.forEach(n => {
+                n.x += n.vx; n.y += n.vy;
+                if (n.x < -200 || n.x > W+200) n.vx *= -1;
+                if (n.y < -200 || n.y > H+200) n.vy *= -1;
+                
+                const g = ctx.createRadialGradient(n.x + pX * 0.5, n.y + pY * 0.5, 0, n.x + pX * 0.5, n.y + pY * 0.5, n.r);
+                g.addColorStop(0, n.color);
+                g.addColorStop(1, 'transparent');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(n.x + pX * 0.5, n.y + pY * 0.5, n.r, 0, Math.PI*2); ctx.fill();
+            });
+
+            stars.forEach(st => {
+                st.y += st.s; 
+                if(st.y > H) { st.y = 0; st.x = Math.random()*W; }
+                
+                st.a += st.ts; 
+                let alpha = st.baseAlpha + Math.sin(st.a) * 0.15;
+                if (alpha < 0.1) alpha = 0.1;
+                if (alpha > 0.8) alpha = 0.8;
+                
+                ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+                ctx.beginPath(); ctx.arc(st.x + pX, st.y + pY, st.r, 0, Math.PI*2); ctx.fill();
+            });
+
+            asteroids.forEach(ast => {
+                ast.x += ast.vx; ast.y += ast.vy;
+                ast.angle += ast.spin;
+
+                if (ast.x < -100) ast.x = W + 100;
+                if (ast.x > W + 100) ast.x = -100;
+                if (ast.y < -100) ast.y = H + 100;
+                if (ast.y > H + 100) ast.y = -100;
+
+                ctx.save();
+                ctx.translate(ast.x + pX * 1.5, ast.y + pY * 1.5);
+                ctx.rotate(ast.angle);
+                
+                ctx.fillStyle = 'rgba(100, 100, 110, 0.15)';
+                ctx.beginPath();
+                for (let j = 0; j < ast.shape.length; j++) {
+                    const theta = (j / ast.shape.length) * Math.PI * 2;
+                    const rad = ast.r * ast.shape[j];
+                    const px = Math.cos(theta) * rad;
+                    const py = Math.sin(theta) * rad;
+                    if (j === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.strokeStyle = 'rgba(150, 150, 160, 0.1)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                ctx.beginPath(); ctx.arc(ast.r*0.3, -ast.r*0.2, ast.r*0.2, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(-ast.r*0.2, ast.r*0.3, ast.r*0.15, 0, Math.PI*2); ctx.fill();
+                
+                ctx.restore();
+            });
+
+            if (Math.random() < 0.003) spawnComet();
+
+            for (let i = comets.length - 1; i >= 0; i--) {
+                let c = comets[i];
+                c.x += c.vx; c.y += c.vy; c.life--;
+                
+                if (c.life <= 0 || c.x < -100 || c.x > W+100 || c.y < -100 || c.y > H+100) {
+                    comets.splice(i, 1); continue;
+                }
+
+                const tailLen = 150;
+                const angle = Math.atan2(c.vy, c.vx);
+                const tailX = c.x - Math.cos(angle) * tailLen;
+                const tailY = c.y - Math.sin(angle) * tailLen;
+
+                const grad = ctx.createLinearGradient(c.x, c.y, tailX, tailY);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 0.2)'); 
+                grad.addColorStop(0.2, 'rgba(0, 255, 255, 0.1)');
+                grad.addColorStop(1, 'transparent');
+
+                ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = grad;
+                ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(tailX, tailY); ctx.stroke();
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
+                ctx.beginPath(); ctx.arc(c.x, c.y, 2, 0, Math.PI*2); ctx.fill();
+            }
+
+            requestAnimationFrame(drawBackground);
+        }
+
+        function spawnComet() {
+            const side = Math.random() > 0.5 ? 'left' : 'right';
+            let x, y, vx, vy;
+            if (side === 'left') {
+                x = -50; y = Math.random() * (H * 0.5);
+                vx = Math.random() * 4 + 2; vy = Math.random() * 2 + 1;
+            } else {
+                x = W + 50; y = Math.random() * (H * 0.5);
+                vx = -(Math.random() * 4 + 2); vy = Math.random() * 2 + 1;
+            }
+            comets.push({ x, y, vx, vy, life: 600 });
+        }
+
+        initBackground(); 
+        drawBackground();
+    })();
+    </script>
+</body>
+</html>
