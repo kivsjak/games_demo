@@ -1,0 +1,4322 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiki-Taka Goal - Fixed Logic</title>
+    <style>
+        :root {
+            --cell-w: 75px;
+            --cell-h: 60px;
+            --field-w: 1208px;
+            --field-h: 608px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121212;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* --- UI LAYER (HUD) --- */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 2000;
+            display: flex; flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+
+        .ui-top { pointer-events: auto; display: flex; justify-content: center; width: 100%; position: relative; }
+        .ui-bottom { pointer-events: auto; display: flex; justify-content: center; width: 100%; padding-bottom: 10px; }
+
+        #match-panel {
+            background: rgba(0,0,0,0.85);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 10px 20px;
+            display: flex; 
+            flex-direction: row; 
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            max-width: 95%;
+        }
+
+        #top-row { display: flex; gap: 10px; align-items: center; }
+        #timer { font-family: monospace; font-size: 20px; font-weight: bold; color: #fff; }
+        
+        #restart-btn {
+            background: rgba(74,158,255,0.2); border: 1px solid #4A9EFF; color: #4A9EFF;
+            width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+            transition: all 0.3s;
+        }
+        #restart-btn:hover { background: rgba(74,158,255,0.4); transform: rotate(180deg); }
+
+        #scoreboard { 
+            display: flex; align-items: center; gap: 15px; 
+            font-size: 24px; font-weight: 900; 
+        }
+        
+        .team-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .blue { background: #4A9EFF; box-shadow: 0 0 10px #4A9EFF; }
+        .red { background: #FF4A4A; box-shadow: 0 0 10px #FF4A4A; }
+
+        .panel-divider { width: 1px; height: 30px; background: rgba(255,255,255,0.2); }
+
+        #multiplier-rail {
+            display: flex; flex-direction: row; gap: 5px; align-items: center;
+            pointer-events: auto; overflow-x: auto; padding-bottom: 5px; 
+            scrollbar-width: none; max-width: 600px;
+        }
+        #multiplier-rail::-webkit-scrollbar { display: none; }
+
+        .mult-pill {
+            background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 4px;
+            font-size: 14px; color: #888; font-weight: bold; white-space: nowrap; 
+            transition: all 0.3s; border-bottom: 2px solid transparent; 
+        }
+        .mult-pill.active {
+            background: rgba(74, 158, 255, 0.25); color: #fff; transform: scale(1.1);
+            border-bottom-color: #4A9EFF; box-shadow: 0 0 15px rgba(74,158,255,0.2);
+        }
+        .mult-pill.passed { color: #4AFF4A; opacity: 0.5; background: transparent; }
+        .mult-pill.bounce {
+            animation: multBounce 0.5s ease-out;
+        }
+        @keyframes multBounce {
+            0% { transform: scale(1); }
+            30% { transform: scale(1.3); }
+            50% { transform: scale(0.9); }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        #phase-container {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            text-align: center; 
+            pointer-events: none !important;
+            z-index: 1500;
+        }
+        
+        /* Новий шестикутник для phase */
+        #phase-hexagon {
+            position: relative;
+            display: inline-block;
+            background: linear-gradient(180deg, #2DD4BF 0%, #14B8A6 100%);
+            padding: 15px 40px 20px 40px;
+            clip-path: polygon(10% 0%, 90% 0%, 100% 50%, 90% 100%, 10% 100%, 0% 50%);
+            min-width: 180px;
+            transition: background 0.3s;
+        }
+        #phase-hexagon.pulse {
+            animation: hexPulse 1.5s infinite;
+        }
+        #phase-hexagon.color-pass {
+            background: linear-gradient(180deg, #4A9EFF 0%, #2563EB 100%);
+        }
+        #phase-hexagon.color-strike {
+            background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
+        }
+        #phase-hexagon.color-defense {
+            background: linear-gradient(180deg, #4A9EFF 0%, #2563EB 100%);
+        }
+        #phase-hexagon.color-goal {
+            background: linear-gradient(180deg, #4ADE80 0%, #22C55E 100%);
+        }
+        #phase-hexagon.color-bet {
+            background: linear-gradient(180deg, #2DD4BF 0%, #14B8A6 100%);
+        }
+        @keyframes hexPulse { 
+            0%, 100% { transform: scale(0.97); } 
+            50% { transform: scale(1.03); } 
+        }
+        #phase-hexagon .phase-label {
+            font-size: 14px; font-weight: 700; color: rgba(0,0,0,0.7);
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        #phase-hexagon .phase-mult {
+            font-size: 48px; font-weight: 900; color: #000;
+            line-height: 1;
+        }
+        
+        #phase-desc {
+            display: none; /* Приховано */
+        }
+        
+        #phase-banner {
+            font-size: 36px; font-weight: 900; text-transform: uppercase;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.8); letter-spacing: 2px;
+            pointer-events: none;
+            display: none; /* Ховаємо старий банер */
+        }
+        .txt-attack { color: #4AFF4A; } .txt-defense { color: #FF4A4A; } .txt-strike { color: #FFD700; }
+
+        #controls-bar {
+            background: rgba(45,45,45,0.98); border: 1px solid rgba(255,255,255,0.1);
+            padding: 20px 30px; border-radius: 16px; display: flex; gap: 30px; align-items: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            transition: transform 0.4s ease-in-out;
+        }
+        #controls-bar.hidden {
+            transform: translateY(150%);
+        }
+        
+        /* Cashout панель */
+        #cashout-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%) translateY(150%);
+            transition: transform 0.4s ease-in-out;
+            z-index: 2001;
+        }
+        #cashout-bar.visible {
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        #btn-cashout {
+            background: linear-gradient(180deg, #6B7280 0%, #4B5563 100%);
+            border: none; color: rgba(255,255,255,0.5);
+            padding: 20px 60px; font-size: 20px; font-weight: 800; 
+            border-radius: 50px; cursor: not-allowed;
+            min-width: 280px; text-transform: uppercase;
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            transition: all 0.3s;
+        }
+        #btn-cashout.active {
+            background: linear-gradient(180deg, #4ADE80 0%, #22C55E 100%);
+            color: #000; cursor: pointer;
+            box-shadow: 0 8px 30px rgba(74,222,128,0.4);
+        }
+        #btn-cashout.active:hover {
+            transform: scale(1.05);
+        }
+        #btn-cashout .cashout-icon {
+            font-size: 28px;
+        }
+        #btn-cashout .cashout-text {
+            font-size: 18px; font-weight: 800;
+        }
+
+        /* Секція Bet Amount */
+        .bet-section {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        .section-label {
+            font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+        }
+
+        .bet-grp { display: flex; align-items: center; gap: 5px; position: relative; }
+        .btn-circle {
+            width: 36px; height: 36px; border-radius: 50%; border: none;
+            background: #333; color: white; font-weight: bold; cursor: pointer;
+            font-size: 18px;
+        }
+        .btn-circle:hover { background: #555; }
+        
+        #bet-display {
+            background: #1a1a1a; border: 1px solid #444; color: #fff;
+            padding: 10px 45px; width: 160px; text-align: center;
+            font-size: 18px; font-weight: bold; border-radius: 25px;
+        }
+        
+        .btn-mini {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 30px; height: 100%; border: none; background: transparent;
+            color: #888; font-weight: bold; cursor: pointer; font-size: 12px;
+        }
+        .btn-mini:hover { color: #fff; }
+        .btn-mini.left { left: 40px; } .btn-mini.right { right: 40px; }
+        
+        /* Total Bet */
+        #total-bet {
+            padding: 6px 20px; border-radius: 20px; font-size: 12px; font-weight: 700;
+            text-transform: uppercase; margin-top: 5px;
+            transition: background 0.3s;
+        }
+        #total-bet.chant-1 { background: #64748B; color: #fff; }
+        #total-bet.chant-2 { background: #22C55E; color: #fff; }
+        #total-bet.chant-3 { background: #EAB308; color: #fff; }
+        #total-bet.chant-4 { background: #DC2626; color: #fff; }
+
+        /* Chant Level */
+        .chant-section {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        .chant-buttons {
+            display: flex; gap: 6px; background: #1a1a1a; padding: 8px 12px; border-radius: 30px;
+        }
+        .chant-btn {
+            width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent;
+            cursor: pointer; transition: all 0.2s; position: relative;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 12px; color: rgba(0,0,0,0.7);
+        }
+        .chant-btn.level-1 { background: #64748B; } /* Сірий для OFF */
+        .chant-btn.level-2 { background: #22C55E; }
+        .chant-btn.level-3 { background: #EAB308; }
+        .chant-btn.level-4 { background: #DC2626; }
+        
+        /* Неактивний стан (не вибраний) */
+        .chant-btn:not(.active) { 
+            opacity: 0.4;
+            transform: scale(0.9);
+        }
+        
+        /* Ховер на неактивному */
+        .chant-btn:not(.active):hover {
+            opacity: 0.7;
+            transform: scale(0.95);
+        }
+        
+        /* Активний стан (вибраний) */
+        .chant-btn.active { 
+            opacity: 1;
+            transform: scale(1);
+            border-color: rgba(255,255,255,0.5);
+            box-shadow: 0 0 20px currentColor;
+        }
+        
+        /* Стрілка під активним */
+        .chant-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 6px solid #fff;
+        }
+
+        .diff-tabs { display: flex; background: #1a1a1a; padding: 6px; border-radius: 25px; gap: 4px; }
+        .diff-tab {
+            padding: 10px 20px; background: transparent; border: none;
+            color: #666; cursor: pointer; font-size: 14px; font-weight: 600;
+            border-radius: 20px; transition: all 0.2s;
+        }
+        .diff-tab.active { background: #333; color: #fff; }
+
+        /* Play Button */
+        #btn-main {
+            background: linear-gradient(180deg, #B45309 0%, #92400E 100%); 
+            border: none; color: white;
+            width: 90px; height: 90px; border-radius: 50%; cursor: pointer;
+            box-shadow: 0 8px 30px rgba(180,83,9,0.5);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; transition: all 0.2s;
+        }
+        #btn-main:hover { transform: scale(1.05); }
+        #btn-main .play-icon {
+            font-size: 28px;
+        }
+        #btn-main .play-text {
+            font-size: 14px; font-weight: 800; text-transform: uppercase;
+        }
+
+        /* --- CROWD/STANDS BACKGROUND --- */
+        #crowd-canvas {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            /* Позиція: верхній край поля після rotateX(45deg) scale(1.4) */
+            /* field-h = 608px, після трансформації верх ~= -608/2 * cos(45) * 1.4 ≈ -300px від центру */
+            top: calc(50% - 300px - 259px); /* 259px = висота canvas (8*28 + 35) */
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* --- 3D SCENE --- */
+        #viewport {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            perspective: 1200px; overflow: hidden;
+            background: transparent;
+            pointer-events: none;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1;
+        }
+
+        #world-container {
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+            pointer-events: none;
+        }
+
+        #field-pivot {
+            position: relative; 
+            transform-style: preserve-3d;
+            transform: rotateX(45deg) rotateZ(0deg) scale(1.4); 
+            pointer-events: none;
+        }
+
+        #field-board {
+            position: absolute; width: var(--field-w); height: var(--field-h);
+            left: 50%; top: 50%;
+            margin-left: calc(var(--field-w) / -2);
+            margin-top: calc(var(--field-h) / -2);
+            background: linear-gradient(90deg, #388E3C 50%, #2E7D32 50%);
+            background-size: 150px 100%;
+            border: 15px solid #3E2723;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.7);
+            transform-style: preserve-3d;
+            pointer-events: none;
+        }
+
+        .f-line { position: absolute; background: rgba(255,255,255,0.7); pointer-events: none; }
+        .f-center { width: 2px; height: 100%; left: 50%; top: 0; }
+        .f-circle { 
+            position: absolute; width: 190px; height: 190px; 
+            border: 2px solid rgba(255,255,255,0.7); border-radius: 50%; 
+            left: 50%; top: 50%; transform: translate(-50%, -50%); 
+            pointer-events: none; background: transparent;
+        }
+        .f-box { position: absolute; border: 2px solid rgba(255,255,255,0.7); pointer-events: none; background: transparent; }
+        .box-l { width: 225px; height: 360px; left: 0; top: 124px; border-left: none; }
+        .box-r { width: 225px; height: 360px; right: 0; top: 124px; border-right: none; }
+        .goal-area-l { width: 75px; height: 180px; left: 0; top: 214px; border-left: none; }
+        .goal-area-r { width: 75px; height: 180px; right: 0; top: 214px; border-right: none; }
+        
+        .goal-struct { position: absolute; width: 40px; height: 140px; top: 234px; transform-style: preserve-3d; pointer-events: none; }
+        .goal-l { left: -35px; } .goal-r { right: -35px; transform: rotateZ(180deg); }
+        .net-mesh { position: absolute; width: 100%; height: 100%; background: rgba(255,255,255,0.15); border: 2px solid #fff; transform: rotateY(90deg) translateZ(-20px); pointer-events: none; }
+
+        #grid-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            transform-style: preserve-3d; 
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .cell {
+            position: absolute; width: 75px; height: 60px;
+            transform-style: preserve-3d; 
+            cursor: pointer; 
+            pointer-events: auto !important;
+            transition: all 0.2s;
+            background: transparent;
+            border: none;
+        }
+        
+        .cell:hover { background: rgba(255,255,255,0.1); transform: translateZ(10px); }
+        
+        .cell.selectable {
+            background: rgba(74, 158, 255, 0.3); 
+            border: 2px solid rgba(74, 158, 255, 0.8);
+            box-shadow: 0 0 20px rgba(74, 158, 255, 0.5); 
+            animation: pulse 1.5s infinite;
+            transform: translateZ(5px); 
+            pointer-events: auto !important;
+            z-index: 2000;
+        }
+        
+        .cell.selectable.inactive {
+            background: rgba(128, 128, 128, 0.3);
+            border: 2px solid rgba(128, 128, 128, 0.6);
+            box-shadow: 0 0 10px rgba(128, 128, 128, 0.3);
+            animation: none;
+            pointer-events: none !important;
+        }
+        
+        /* Фінальна версія - всі клітинки однакового стилю */
+        .cell.selectable.winning { 
+            background: rgba(74, 158, 255, 0.3);
+            border: 3px solid #4A9EFF !important; 
+            box-shadow: 0 0 25px rgba(74, 158, 255, 0.6); 
+        }
+        .cell.selectable.winning.strike-phase { 
+            background: rgba(251, 191, 36, 0.3);
+            border: 3px solid #FBBF24 !important; 
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.6); 
+        }
+        /* Losing клітинки виглядають так само як winning (без червоного) */
+        .cell.selectable.losing { 
+            background: rgba(74, 158, 255, 0.3);
+            border: 3px solid #4A9EFF !important; 
+            box-shadow: 0 0 25px rgba(74, 158, 255, 0.6); 
+        }
+        .cell.selectable.losing.strike-phase { 
+            background: rgba(251, 191, 36, 0.3);
+            border: 3px solid #FBBF24 !important; 
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.6); 
+        }
+        /* Ховаємо дебаг стилі */
+        .cell.special { background: transparent; border: none; }
+        .cell.negative { background: transparent; border: none; }
+        @keyframes pulse { 0%, 100% { transform: translateZ(5px) scale(0.97); } 50% { transform: translateZ(12px) scale(1.03); } }
+
+        /* Ховаємо маркери спецклітинок */
+        .strike-marker {
+            display: none;
+        }
+
+        .foul-marker {
+            display: none;
+        }
+
+        .corner-marker {
+            display: none;
+        }
+
+        .opponent-strike-marker {
+            display: none;
+        }
+
+        .hover-arrow {
+            position: absolute; height: 3px; background: rgba(255, 255, 255, 0.6);
+            transform-origin: left center; z-index: 80;
+            pointer-events: none; border-radius: 2px;
+            transition: opacity 0.1s;
+        }
+
+        .entity-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; transform-style: preserve-3d; z-index: 500;
+        }
+
+        .player-3d {
+            position: absolute; width: 0; height: 0; 
+            transform-style: preserve-3d;
+            transition: transform 0.5s linear;
+            will-change: transform;
+            pointer-events: none;
+        }
+
+        .p-shadow {
+            position: absolute; width: 16px; height: 16px; background: rgba(0,0,0,0.5);
+            border-radius: 50%; left: -8px; top: -8px; transform: translateZ(1px);
+        }
+
+        .p-canvas {
+            position: absolute;
+            left: -35px;
+            top: -100px;
+            width: 70px;
+            height: 115px;
+            transform-origin: bottom center;
+            transform: rotateX(-45deg);
+            pointer-events: none;
+        }
+        
+        .p-label {
+            display: none; /* Приховано */
+        }
+        
+        .cell-label {
+            display: none; /* Приховано */
+            color: rgba(255,255,255,0.4);
+            pointer-events: none;
+        }
+
+        #ball {
+            position: absolute; width: 10px; height: 10px;
+            background: #fff; border-radius: 50%; box-shadow: inset -2px -2px 4px rgba(0,0,0,0.3);
+            transform: translateZ(5px); transition: transform 0.4s ease-out; z-index: 2000;
+            pointer-events: none;
+        }
+
+        .arrow-3d {
+            position: absolute; height: 3px; background: #4AFF4A;
+            transform-origin: left center; z-index: 90;
+            box-shadow: 0 0 15px #4AFF4A; pointer-events: none; border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-layer">
+        <div class="ui-top">
+            <div id="match-panel">
+                <div id="top-row">
+                    <div id="timer">00:00</div>
+                    <button id="restart-btn">⟳</button>
+                </div>
+                <div id="scoreboard">
+                    <div class="team-dot blue"></div>
+                    <span id="score">0 - 0</span>
+                    <div class="team-dot red"></div>
+                </div>
+                <div class="panel-divider"></div>
+                <div id="multiplier-rail"></div>
+            </div>
+        </div>
+        <div id="phase-container">
+            <div id="phase-hexagon">
+                <div class="phase-label">PLACE</div>
+                <div class="phase-mult">BET</div>
+            </div>
+            <div id="phase-desc">SELECT YOUR BET AND PRESS PLAY</div>
+        </div>
+        <div class="ui-bottom">
+            <div id="controls-bar">
+                <div class="bet-section">
+                    <div class="section-label">BET AMOUNT</div>
+                    <div class="bet-grp">
+                        <button class="btn-circle" id="btn-dec">−</button>
+                        <button class="btn-mini left" id="btn-half">½</button>
+                        <input id="bet-display" value="$10.00" readonly>
+                        <button class="btn-mini right" id="btn-double">2x</button>
+                        <button class="btn-circle" id="btn-inc">+</button>
+                    </div>
+                    <div id="total-bet" class="chant-1">TOTAL BET: $10.00</div>
+                </div>
+                <div class="chant-section">
+                    <div class="section-label">CHANT LEVEL</div>
+                    <div class="chant-buttons">
+                        <button class="chant-btn level-1 active" data-level="1">OFF</button>
+                        <button class="chant-btn level-2" data-level="2">Ⅰ</button>
+                        <button class="chant-btn level-3" data-level="3">Ⅱ</button>
+                        <button class="chant-btn level-4" data-level="4">Ⅲ</button>
+                    </div>
+                </div>
+                <div class="diff-section">
+                    <div class="section-label">DIFFICULTY</div>
+                    <div class="diff-tabs">
+                        <button class="diff-tab active" data-d="easy">Easy</button>
+                        <button class="diff-tab" data-d="hard">Hard</button>
+                    </div>
+                </div>
+                <button id="btn-main">
+                    <span class="play-icon">🎯</span>
+                    <span class="play-text">PLAY</span>
+                </button>
+            </div>
+            <div id="cashout-bar">
+                <button id="btn-cashout">
+                    <span class="cashout-icon">⚽</span>
+                    <span class="cashout-text">CASHOUT</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="world-container">
+            <!-- Трибуни (фон) - всередині world-container для синхронного руху -->
+            <canvas id="crowd-canvas"></canvas>
+            
+            <div id="field-pivot">
+                <div id="field-board">
+                    <div class="f-line f-center"></div>
+                    <div class="f-circle"></div>
+                    <div class="f-box box-l"></div>
+                    <div class="f-box box-r"></div>
+                    <div class="f-box goal-area-l"></div>
+                    <div class="f-box goal-area-r"></div>
+                    <div class="goal-struct goal-l"><div class="net-mesh"></div></div>
+                    <div class="goal-struct goal-r"><div class="net-mesh"></div></div>
+                    <div id="grid-layer"></div>
+                    <div class="entity-layer" id="entities-layer">
+                        <div id="ball"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ==========================================
+// SOUND EFFECTS (SFX) SYSTEM
+// ==========================================
+class FootballSFX {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.pinkNoiseBuffer = null;
+        this.brownNoiseBuffer = null;
+    }
+
+    playKick() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.5);
+        gain.gain.setValueAtTime(1, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.5);
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this._getBrownNoise(); 
+        const noiseGain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+        
+        filter.type = 'lowpass';
+        filter.frequency.value = 150;
+        
+        noiseGain.gain.setValueAtTime(0.8, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+        
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(this.ctx.destination);
+        noise.start(t);
+        noise.stop(t + 0.1);
+    }
+
+    playBoo() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        const dur = 2.5;
+
+        this._createCrowdLayer('brown', 120, 2, 0.8, dur, t);
+        
+        const layer2 = this._createCrowdLayer('brown', 250, 3, 0.6, dur, t);
+        layer2.filter.frequency.setValueAtTime(250, t);
+        layer2.filter.frequency.linearRampToValueAtTime(180, t + dur);
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this._getPinkNoise();
+        const nGain = this.ctx.createGain();
+        const nFilter = this.ctx.createBiquadFilter();
+        nFilter.type = "lowpass";
+        nFilter.frequency.value = 400; 
+        nGain.gain.setValueAtTime(0, t);
+        nGain.gain.linearRampToValueAtTime(0.3, t + 0.5);
+        nGain.gain.linearRampToValueAtTime(0, t + dur);
+        noise.connect(nFilter);
+        nFilter.connect(nGain);
+        nGain.connect(this.ctx.destination);
+        noise.start(t);
+        noise.stop(t + dur);
+    }
+
+    playGoal() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        const dur = 6.0;
+
+        this._createCrowdLayer('brown', 400, 1, 0.8, dur, t);
+        const l2 = this._createCrowdLayer('pink', 800, 4, 0.6, dur, t);
+        l2.filter.frequency.linearRampToValueAtTime(900, t + 0.5);
+        this._createCrowdLayer('pink', 1200, 6, 0.4, dur, t);
+    }
+
+    playMiss() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        const dur = 2.5;
+
+        const l1 = this._createCrowdLayer('brown', 400, 5, 0.8, dur, t);
+        l1.filter.frequency.setValueAtTime(400, t);
+        l1.filter.frequency.exponentialRampToValueAtTime(250, t + 2.0);
+
+        const l2 = this._createCrowdLayer('pink', 800, 5, 0.4, dur, t);
+        l2.filter.frequency.setValueAtTime(800, t);
+        l2.filter.frequency.exponentialRampToValueAtTime(500, t + 2.0);
+    }
+
+    playWhistle() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        const duration = 0.6; 
+        
+        const freqs = [2200, 2450]; 
+
+        freqs.forEach(f => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, t);
+            osc.frequency.exponentialRampToValueAtTime(f * 0.95, t + duration);
+
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
+            gain.gain.linearRampToValueAtTime(0.3, t + duration - 0.1); 
+            gain.gain.linearRampToValueAtTime(0, t + duration);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(t);
+            osc.stop(t + duration);
+        });
+    }
+
+    playCashout() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        const duration = 2.0;
+        const count = 25; 
+
+        for (let i = 0; i < count; i++) {
+            const start = t + (Math.random() * duration * 0.8);
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = this._getPinkNoise();
+            
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass'; 
+            filter.frequency.value = 1200 + Math.random() * 800;
+            filter.Q.value = 1; 
+            
+            const gain = this.ctx.createGain();
+            gain.gain.setValueAtTime(0, start);
+            gain.gain.linearRampToValueAtTime(0.3, start + 0.005);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + 0.06);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            noise.start(start);
+            noise.stop(start + 0.1);
+        }
+    }
+
+    playPassSuccess() {
+        this._resumeContext();
+        const t = this.ctx.currentTime;
+        const dur = 0.8;
+
+        this._createCrowdLayer('pink', 700, 3, 0.5, dur, t);
+        
+        const l2 = this._createCrowdLayer('pink', 1500, 2, 0.3, dur, t);
+        l2.filter.frequency.linearRampToValueAtTime(1600, t + 0.3);
+    }
+
+    _resumeContext() {
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    _createCrowdLayer(type, freq, q, gainVal, duration, startTime) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = (type === 'brown' || freq < 500) ? this._getBrownNoise() : this._getPinkNoise();
+        src.loop = true;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = freq;
+        filter.Q.value = q;
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0, startTime);
+        gain.gain.linearRampToValueAtTime(gainVal, startTime + (duration * 0.1));
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        src.start(startTime);
+        src.stop(startTime + duration + 0.5);
+        return { filter, gain };
+    }
+
+    _getPinkNoise() {
+        if (!this.pinkNoiseBuffer) {
+            const bufferSize = this.ctx.sampleRate * 4;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let b0, b1, b2, b3, b4, b5, b6;
+            b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99886 * b0 + white * 0.0555179;
+                b1 = 0.99332 * b1 + white * 0.0750759;
+                b2 = 0.96900 * b2 + white * 0.1538520;
+                b3 = 0.86650 * b3 + white * 0.3104856;
+                b4 = 0.55000 * b4 + white * 0.5329522;
+                b5 = -0.7616 * b5 - white * 0.0168980;
+                data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                data[i] *= 0.11; 
+                b6 = white * 0.115926;
+            }
+            this.pinkNoiseBuffer = buffer;
+        }
+        return this.pinkNoiseBuffer;
+    }
+
+    _getBrownNoise() {
+        if (!this.brownNoiseBuffer) {
+            const bufferSize = this.ctx.sampleRate * 4;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let lastOut = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= 3.5; 
+            }
+            this.brownNoiseBuffer = buffer;
+        }
+        return this.brownNoiseBuffer;
+    }
+}
+
+// Глобальний екземпляр SFX
+let sfx = null;
+
+// ==========================================
+// CROWD/STANDS SYSTEM
+// ==========================================
+const CROWD_OPACITY = 0.8;
+const ROWS_COUNT = 8;
+
+const crowdState = {
+    wave: false,
+    flags: false,
+    flares: false
+};
+
+const crowdRegistry = [];
+const smokeParticles = [];
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+}
+
+function drawCrowdArm(ctx, sx, sy, shirtColor, skinColor, upperAngle, lowerAngle) {
+    const upperLen = 14;
+    const upperW = 8;
+    
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(upperAngle); 
+    
+    ctx.fillStyle = shirtColor;
+    roundRect(ctx, -upperW/2, 0, upperW, upperLen, 4, true, false);
+    
+    ctx.translate(0, upperLen - 2); 
+    ctx.rotate(lowerAngle);
+    
+    ctx.fillStyle = skinColor;
+    const lowerLen = 14;
+    const lowerW = 8;
+    roundRect(ctx, -lowerW/2, 0, lowerW, lowerLen, 4, true, false);
+    
+    ctx.restore();
+}
+
+function spawnSmoke(x, y) {
+    smokeParticles.push({
+        x: x,
+        y: y,
+        vx: -0.5 - Math.random() * 1.5,
+        vy: -1.0 - Math.random() * 2.0,
+        size: 5 + Math.random() * 10,
+        life: 1.0,
+        decay: 0.01 + Math.random() * 0.01
+    });
+}
+
+function updateAndDrawSmoke(ctx) {
+    for (let i = smokeParticles.length - 1; i >= 0; i--) {
+        const p = smokeParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.size += 0.2;
+        p.life -= p.decay;
+
+        if (p.life <= 0) {
+            smokeParticles.splice(i, 1);
+            continue;
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(74, 158, 255, ${p.life * 0.5})`;
+        ctx.fill();
+    }
+}
+
+function drawSpectator(ctx, x, y, scale, props, time) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    const hasFlag = crowdState.flags && props.hasFlag;
+    const hasFlare = crowdState.flares && props.hasFlare;
+    const participatesInWave = !hasFlag && !hasFlare;
+
+    let bounceSpeed = props.animSpeed; 
+    let phase = props.phase;
+    let animY = Math.sin(time * bounceSpeed + phase) * 2; 
+    
+    let isWaving = false;
+    
+    if (crowdState.wave && participatesInWave) {
+        const waveVal = Math.sin(time * 0.005 - x * 0.01);
+        if (waveVal > 0.6) {
+            isWaving = true;
+            const waveHeight = (waveVal - 0.6) * 40; 
+            animY -= waveHeight; 
+        }
+    }
+
+    ctx.fillStyle = props.shirt;
+    const bodyW = 24;
+    const bodyH = 32;
+    roundRect(ctx, -bodyW/2, -10 + animY, bodyW, bodyH, 10, true, false);
+
+    const headBob = Math.sin(time * bounceSpeed + phase - 0.5) * 1; 
+    const headY = -22 + animY + headBob;
+    
+    ctx.fillStyle = props.skin;
+    ctx.beginPath();
+    ctx.arc(0, headY, 12, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = props.hair;
+    ctx.beginPath();
+    ctx.arc(0, headY, 12, Math.PI, 0); 
+    ctx.fill();
+    
+    const shoulderY = -8 + animY;
+    
+    let leftArmUpper = 0.1;
+    let leftArmLower = 0.1;
+    let rightArmUpper = -0.1;
+    let rightArmLower = -0.1;
+
+    if (isWaving) {
+        leftArmUpper = Math.PI - 0.5;
+        leftArmLower = 0;
+        rightArmUpper = -Math.PI + 0.5;
+        rightArmLower = 0;
+    }
+
+    if (hasFlag) {
+        rightArmUpper = -Math.PI / 1.9;
+        rightArmLower = -0.1;
+    }
+
+    if (hasFlare) {
+        leftArmUpper = Math.PI / 1.5; 
+        leftArmLower = -0.5;
+    }
+
+    drawCrowdArm(ctx, -bodyW/2 - 2, shoulderY, props.shirt, props.skin, leftArmUpper, leftArmLower); 
+    
+    if (hasFlare) {
+        ctx.save();
+        const armLen = 24; 
+        const flareX = -bodyW/2 - 2 + Math.sin(leftArmUpper) * armLen - 15; 
+        const flareY = shoulderY + Math.cos(leftArmUpper) * armLen - 10;    
+
+        ctx.translate(flareX, flareY);
+        ctx.rotate(-0.5); 
+        
+        ctx.fillStyle = "#333";
+        ctx.fillRect(0, 0, 4, 15);
+
+        ctx.beginPath();
+        ctx.arc(2, 0, 6 + Math.random()*2, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFF";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(2, 0, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFD700"; 
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    drawCrowdArm(ctx, bodyW/2 + 2, shoulderY, props.shirt, props.skin, rightArmUpper, rightArmLower);
+
+    if (hasFlag) {
+        ctx.save();
+        const poleBaseX = bodyW/2 + 10;
+        const poleBaseY = shoulderY + 10;
+        
+        ctx.translate(poleBaseX, poleBaseY);
+        const poleSway = Math.sin(time * 0.002) * 0.05;
+        ctx.rotate(-0.1 + poleSway);
+
+        const poleHeight = 250;
+        ctx.fillStyle = "#5D4037";
+        ctx.fillRect(0, -poleHeight + 10, 4, poleHeight);
+
+        const flagW = 200;
+        const flagH = 125;
+        
+        ctx.fillStyle = "#4A9EFF"; 
+        
+        ctx.beginPath();
+        ctx.moveTo(4, -poleHeight + 10);
+        
+        for (let i = 0; i <= flagW; i += 5) {
+            const waveY = Math.sin(time * 0.005 + i * 0.05) * 10;
+            ctx.lineTo(4 + i, -poleHeight + 10 + waveY);
+        }
+        
+        const rightWaveY = Math.sin(time * 0.005 + flagW * 0.05) * 10;
+        ctx.lineTo(4 + flagW, -poleHeight + 10 + flagH + rightWaveY);
+        
+        for (let i = flagW; i >= 0; i -= 5) {
+            const waveY = Math.sin(time * 0.005 + i * 0.05) * 10;
+            ctx.lineTo(4 + i, -poleHeight + 10 + flagH + waveY);
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    ctx.restore();
+}
+
+function initCrowd() {
+    const canvas = document.getElementById('crowd-canvas');
+    if (!canvas) return;
+    
+    // Ширина верхньої частини поля після 3D трансформації (ширше ніж нижня)
+    // Поле 1208px + border 30px = 1238px, але верх ширший через перспективу ~1500px
+    const fieldTopWidth = 1550;
+    canvas.width = fieldTopWidth;
+    
+    // Висота: 8 рядів глядачів + щити
+    const rowHeight = 28;
+    const boardHeight = 35;
+    const totalCrowdHeight = ROWS_COUNT * rowHeight;
+    canvas.height = totalCrowdHeight + boardHeight;
+    
+    crowdRegistry.length = 0;
+
+    const skinColors = ['#ffdbac', '#f1c27d', '#e0ac69', '#8d5524', '#c68642'];
+    const hairColors = ['#2c1a0b', '#000000', '#4a3b2a', '#785028'];
+
+    const spectatorScale = 0.32;
+    const colWidth = 22;
+    
+    // Щити внизу canvas
+    const boardY = canvas.height - boardHeight;
+    
+    // Трибуни над щитами (від 0 до boardY)
+    const startY = 0;
+
+    // Фіксовані позиції для 6 прапорів (рівномірно по ширині)
+    const flagPositions = [
+        { x: canvas.width * 0.08, row: 6 },
+        { x: canvas.width * 0.25, row: 5 },
+        { x: canvas.width * 0.42, row: 6 },
+        { x: canvas.width * 0.58, row: 5 },
+        { x: canvas.width * 0.75, row: 6 },
+        { x: canvas.width * 0.92, row: 5 }
+    ];
+    
+    // Фіксовані позиції для фаєрів (між прапорами)
+    const flarePositions = [
+        { x: canvas.width * 0.15, row: 7 },
+        { x: canvas.width * 0.35, row: 6 },
+        { x: canvas.width * 0.50, row: 7 },
+        { x: canvas.width * 0.65, row: 6 },
+        { x: canvas.width * 0.85, row: 7 }
+    ];
+
+    for (let r = 0; r < ROWS_COUNT; r++) {
+        const y = startY + (r * rowHeight);
+        const rowOffset = (r % 2 === 0) ? colWidth / 2 : 0;
+
+        for (let x = -20; x < canvas.width + 20; x += colWidth) {
+            if (Math.random() > 0.12) { 
+                const jitterX = (Math.random() - 0.5) * 8;
+                const jitterY = (Math.random() - 0.5) * 4;
+                
+                const randColor = Math.random();
+                let shirtColor;
+                if (randColor < 0.6) shirtColor = '#4A9EFF'; 
+                else if (randColor < 0.9) shirtColor = '#333333';
+                else shirtColor = '#FF4A4A'; 
+
+                // Перевіряємо чи це позиція для прапора
+                let hasFlag = false;
+                for (let i = flagPositions.length - 1; i >= 0; i--) {
+                    const fp = flagPositions[i];
+                    if (fp.row === r && Math.abs(x - fp.x) < colWidth) {
+                        hasFlag = true;
+                        flagPositions.splice(i, 1); // Видаляємо використану позицію
+                        break;
+                    }
+                }
+                
+                // Перевіряємо чи це позиція для фаєра
+                let hasFlare = false;
+                if (!hasFlag) {
+                    for (let i = flarePositions.length - 1; i >= 0; i--) {
+                        const fp = flarePositions[i];
+                        if (fp.row === r && Math.abs(x - fp.x) < colWidth) {
+                            hasFlare = true;
+                            flarePositions.splice(i, 1);
+                            break;
+                        }
+                    }
+                }
+
+                crowdRegistry.push({
+                    x: x + rowOffset + jitterX,
+                    y: y + jitterY,
+                    scale: spectatorScale,
+                    shirt: shirtColor,
+                    skin: skinColors[Math.floor(Math.random() * skinColors.length)],
+                    hair: hairColors[Math.floor(Math.random() * hairColors.length)],
+                    phase: Math.random() * Math.PI * 2,
+                    animSpeed: 0.003 + Math.random() * 0.002,
+                    hasFlag: hasFlag,
+                    hasFlare: hasFlare
+                });
+            }
+        }
+    }
+}
+
+function renderCrowd(time) {
+    const canvas = document.getElementById('crowd-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Щити внизу canvas
+    const boardHeight = 35;
+    const boardY = canvas.height - boardHeight;
+    const crowdBottomY = boardY;
+    
+    // Очищаємо весь canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Темний фон тільки для області трибун
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, crowdBottomY);
+
+    ctx.save();
+    ctx.globalAlpha = CROWD_OPACITY; 
+    
+    for (let i = 0; i < crowdRegistry.length; i++) {
+        const s = crowdRegistry[i];
+        
+        drawSpectator(ctx, s.x, s.y, s.scale, s, time);
+        
+        if (crowdState.flares && s.hasFlare) {
+            const armLen = 24 * s.scale;
+            const angle = Math.PI / 1.5;
+            
+            let fx = s.x - (12 * s.scale);
+            let fy = s.y - (8 * s.scale);
+            
+            fx += Math.sin(angle) * armLen;
+            fy += Math.cos(angle) * armLen;
+            
+            fx -= 15 * s.scale;
+            fy -= 15 * s.scale;
+
+            spawnSmoke(fx, fy);
+        }
+    }
+    ctx.restore();
+
+    if (crowdState.flares) {
+        updateAndDrawSmoke(ctx);
+    }
+
+    // Рекламна огорожа (щити)
+    const sectionWidth = 120;
+    let isDark = false; 
+
+    for (let x = 0; x < canvas.width; x += sectionWidth) {
+        ctx.fillStyle = isDark ? '#3A3A3A' : '#444444';
+        const w = Math.min(sectionWidth, canvas.width - x);
+        ctx.fillRect(x, boardY, w, boardHeight);
+        
+        // Верхня лінія світліша
+        ctx.fillStyle = isDark ? '#4A4A4A' : '#555555';
+        ctx.fillRect(x, boardY, w, 3);
+
+        isDark = !isDark;
+    }
+    
+    requestAnimationFrame(renderCrowd);
+}
+
+// Оновлення стану трибун відповідно до chant level
+function updateCrowdState(chantLevel) {
+    if (chantLevel === 1) {
+        // OFF - базова анімація
+        crowdState.wave = false;
+        crowdState.flags = false;
+        crowdState.flares = false;
+    } else if (chantLevel === 2) {
+        // Level I - хвиля
+        crowdState.wave = true;
+        crowdState.flags = false;
+        crowdState.flares = false;
+    } else if (chantLevel === 3) {
+        // Level II - хвиля + прапори
+        crowdState.wave = true;
+        crowdState.flags = true;
+        crowdState.flares = false;
+    } else if (chantLevel === 4) {
+        // Level III - хвиля + прапори + фаєри
+        crowdState.wave = true;
+        crowdState.flags = true;
+        crowdState.flares = true;
+    }
+}
+
+// ==========================================
+// ANIMATION ENGINE (збережено з нового файлу)
+// ==========================================
+const ANIMATIONS = {
+    run: {
+        speed: 0.13,
+        config: {
+            spine: { range: 0.15, baserot: 4.9, length: 70, offset: 0 },
+            head: { range: 0.1, baserot: 4.71, length: 35, offset: 1 },
+            leftThigh: { range: 0.9, baserot: 1.57, length: 55, offset: 0 },
+            leftShin: { range: 1.1, baserot: 0, length: 55, offset: 1.2, type: 'knee' },
+            rightThigh: { range: 0.9, baserot: 1.57, length: 55, offset: Math.PI },
+            rightShin: { range: 1.1, baserot: 0, length: 55, offset: Math.PI + 1.2, type: 'knee' },
+            leftArm: { range: 1.4, baserot: 1.6, length: 50, offset: 0 }, 
+            leftForearm: { range: 1.2, baserot: 0.4, length: 45, offset: 0.8, type: 'elbow' },
+            rightArm: { range: 1.4, baserot: 1.6, length: 50, offset: Math.PI }, 
+            rightForearm: { range: 1.2, baserot: 0.4, length: 45, offset: Math.PI + 0.8, type: 'elbow' }
+        }
+    },
+    kick: {
+        speed: 0.15,
+        config: {
+            spine: { range: 0.15, baserot: 4.8, length: 70, offset: 0 },
+            head: { range: 0.05, baserot: 4.71, length: 35, offset: 1 },
+            leftThigh: { range: 0.1, baserot: 1.65, length: 55, offset: 0 },
+            leftShin: { range: 0.2, baserot: 0.2, length: 55, offset: 0, type: 'knee' },
+            rightThigh: { range: 1.2, baserot: 1.5, length: 55, offset: 0 },
+            rightShin: { range: 1.4, baserot: 0.2, length: 55, offset: 1.4, type: 'knee' },
+            leftArm: { range: 0.6, baserot: 1.8, length: 50, offset: Math.PI },
+            leftForearm: { range: 0.5, baserot: 0.4, length: 45, offset: Math.PI + 0.5, type: 'elbow' },
+            rightArm: { range: 0.4, baserot: 1.4, length: 50, offset: 0 },
+            rightForearm: { range: 0.3, baserot: 0.4, length: 45, offset: 0, type: 'elbow' }
+        }
+    },
+    idle: {
+        speed: 0.04,
+        config: {
+            spine: { range: 0.02, baserot: 4.71, length: 70, offset: 0 },
+            head: { range: 0.03, baserot: 4.71, length: 35, offset: 1 },
+            leftThigh: { range: 0.02, baserot: 1.5, length: 55, offset: 0 },
+            leftShin: { range: 0.05, baserot: 0.1, length: 55, offset: 1.5, type: 'knee' },
+            rightThigh: { range: 0.02, baserot: 1.64, length: 55, offset: Math.PI },
+            rightShin: { range: 0.05, baserot: 0.1, length: 55, offset: Math.PI + 1.5, type: 'knee' },
+            leftArm: { range: 0.1, baserot: 1.4, length: 50, offset: 0 },
+            leftForearm: { range: 0.1, baserot: 0.2, length: 45, offset: 0.5, type: 'elbow' },
+            rightArm: { range: 0.1, baserot: 1.7, length: 50, offset: Math.PI },
+            rightForearm: { range: 0.1, baserot: 0.2, length: 45, offset: Math.PI + 0.5, type: 'elbow' }
+        }
+    }
+};
+
+function getLimbPos(parentX, parentY, limb, time, parentAngle = 0) {
+    let angle;
+    const wave = Math.sin(time + limb.offset);
+    if (limb.type === 'knee') {
+        const bending = (wave + 1) * 0.5 * limb.range; 
+        angle = parentAngle + bending;
+    } else if (limb.type === 'elbow') {
+        const bending = -(wave + 1) * 0.5 * limb.range;
+        angle = parentAngle + bending;
+    } else {
+        angle = limb.baserot + wave * limb.range;
+    }
+    return { x: parentX + Math.cos(angle) * limb.length, y: parentY + Math.sin(angle) * limb.length, angle };
+}
+
+function drawSegment(ctx, x1, y1, x2, y2, width, color) {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+}
+
+function drawFootballer(ctx, centerX, centerY, mode, time, kit) {
+    const conf = ANIMATIONS[mode].config;
+    const spine = getLimbPos(centerX, centerY, conf.spine, time);
+    const head = getLimbPos(spine.x, spine.y, conf.head, time);
+    const lThigh = getLimbPos(centerX, centerY, conf.leftThigh, time);
+    const lShin = getLimbPos(lThigh.x, lThigh.y, conf.leftShin, time, lThigh.angle);
+    const rThigh = getLimbPos(centerX, centerY, conf.rightThigh, time);
+    const rShin = getLimbPos(rThigh.x, rThigh.y, conf.rightShin, time, rThigh.angle);
+    const lArm = getLimbPos(spine.x, spine.y, conf.leftArm, time);
+    const lForearm = getLimbPos(lArm.x, lArm.y, conf.leftForearm, time, lArm.angle);
+    const rArm = getLimbPos(spine.x, spine.y, conf.rightArm, time);
+    const rForearm = getLimbPos(rArm.x, rArm.y, conf.rightForearm, time, rArm.angle);
+
+    const torsoW = 42, thighW = 26, shinW = 18, armW = 18, forearmW = 14, footW = 18;
+    
+    drawSegment(ctx, centerX, centerY, rThigh.x, rThigh.y, thighW, kit.shorts);
+    drawSegment(ctx, rThigh.x, rThigh.y, rShin.x, rShin.y, shinW, kit.socks);
+    drawSegment(ctx, rShin.x, rShin.y, rShin.x + Math.cos(rShin.angle)*16, rShin.y + Math.sin(rShin.angle)*16, footW, kit.boots);
+    drawSegment(ctx, spine.x, spine.y, rArm.x, rArm.y, armW, kit.shirt);
+    drawSegment(ctx, rArm.x, rArm.y, rForearm.x, rForearm.y, forearmW, kit.skin);
+
+    drawSegment(ctx, centerX, centerY, spine.x, spine.y, torsoW, kit.shirt);
+    ctx.beginPath(); ctx.arc(head.x, head.y, 20, 0, Math.PI * 2); ctx.fillStyle = kit.skin; ctx.fill();
+    ctx.fillStyle = '#451a03'; ctx.beginPath(); ctx.arc(head.x, head.y - 8, 20, Math.PI, 0); ctx.fill();
+
+    drawSegment(ctx, centerX, centerY, lThigh.x, lThigh.y, thighW + 2, kit.shorts);
+    drawSegment(ctx, lThigh.x, lThigh.y, lShin.x, lShin.y, shinW + 1, kit.socks);
+    drawSegment(ctx, lShin.x, lShin.y, lShin.x + Math.cos(lShin.angle)*16, lShin.y + Math.sin(lShin.angle)*16, footW + 1, kit.boots);
+    drawSegment(ctx, spine.x, spine.y, armW + 1, kit.shirt);
+    drawSegment(ctx, lArm.x, lArm.y, lForearm.x, lForearm.y, forearmW + 1, kit.skin);
+}
+
+// ==========================================
+// CONSTANTS (виправлені з TT_CLEAN)
+// ==========================================
+const GRID_WIDTH = 16, GRID_HEIGHT = 10, CELL_W = 75, CELL_H = 60, FIELD_W = 1208;
+
+const DIFFICULTY_SETTINGS = {
+    easy: { odds: '3/4', winningCells: 3, totalCells: 4, multipliers: [1.28, 1.64, 2.10, 2.68, 3.44, 4.40, 5.63, 7.21] },
+    hard: { odds: '1/2', winningCells: 1, totalCells: 2, multipliers: [1.92, 3.69, 7.08, 13.59, 26.09, 50.10, 96.19, 184.68] }
+};
+
+// Power/Chant Level System
+const CHANT_LEVELS = {
+    1: { betMultiplier: 1.00, ladderMultiplier: 1.00, color: '#0EA5E9' },
+    2: { betMultiplier: 1.25, ladderMultiplier: 1.30, color: '#22C55E' },
+    3: { betMultiplier: 1.60, ladderMultiplier: 1.70, color: '#CA8A04' },
+    4: { betMultiplier: 2.00, ladderMultiplier: 2.30, color: '#DC2626' }
+};
+
+const FORMATIONS = {
+    kickoff_left: {
+        team1: { 'GK': { x: -0.5, y: 4.5 }, 'LD': { x: 3, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 3, y: 8 }, 'LM': { x: 7, y: 1 }, 'ALM': { x: 6, y: 3 }, 'ARM': { x: 6, y: 6 }, 'RM': { x: 7, y: 8 }, 'CF': { x: 7, y: 4 }, 'CF2': { x: 7, y: 5 } },
+        team2: { 'GK': { x: 16.5, y: 4.5 }, 'LM': { x: 8, y: 1 }, 'CF': { x: 8, y: 3 }, 'CF2': { x: 8, y: 6 }, 'RM': { x: 8, y: 8 }, 'ALM': { x: 10, y: 3 }, 'ARM': { x: 10, y: 6 }, 'LD': { x: 12, y: 1 }, 'RD': { x: 12, y: 8 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 } },
+        ball: { x: 7.5, y: 4.5 }
+    },
+    // Дзеркальна формація - суперник розігрує м'яч
+    kickoff_right: {
+        team1: { 'GK': { x: -0.5, y: 4.5 }, 'LD': { x: 3, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 3, y: 8 }, 'LM': { x: 7, y: 1 }, 'CF': { x: 7, y: 3 }, 'CF2': { x: 7, y: 6 }, 'RM': { x: 7, y: 8 }, 'ALM': { x: 5, y: 3 }, 'ARM': { x: 5, y: 6 } },
+        team2: { 'GK': { x: 16.5, y: 4.5 }, 'LM': { x: 8, y: 1 }, 'ALM': { x: 9, y: 3 }, 'ARM': { x: 9, y: 6 }, 'RM': { x: 8, y: 8 }, 'CF': { x: 8, y: 4 }, 'CF2': { x: 8, y: 5 }, 'LD': { x: 12, y: 1 }, 'RD': { x: 12, y: 8 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 } },
+        ball: { x: 7.5, y: 4.5 }
+    }
+};
+
+const opponentFormations = [
+    { 'CF': { x: 7, y: 3 }, 'CF2': { x: 7, y: 6 }, 'LM': { x: 9, y: 1 }, 'ALM': { x: 9, y: 3 }, 'ARM': { x: 9, y: 6 }, 'RM': { x: 9, y: 8 }, 'LD': { x: 12, y: 1 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 }, 'RD': { x: 12, y: 8 } },
+    { 'CF': { x: 6, y: 3 }, 'CF2': { x: 6, y: 6 }, 'LM': { x: 10, y: 1 }, 'ALM': { x: 10, y: 3 }, 'ARM': { x: 10, y: 6 }, 'RM': { x: 10, y: 8 }, 'LD': { x: 12, y: 1 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 }, 'RD': { x: 12, y: 8 } },
+    { 'CF': { x: 7, y: 3 }, 'CF2': { x: 7, y: 6 }, 'LM': { x: 11, y: 1 }, 'ALM': { x: 11, y: 3 }, 'ARM': { x: 11, y: 6 }, 'RM': { x: 11, y: 8 }, 'LD': { x: 13, y: 1 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 }, 'RD': { x: 13, y: 8 } },
+    { 'CF': { x: 7, y: 3 }, 'CF2': { x: 7, y: 6 }, 'LM': { x: 9, y: 1 }, 'ALM': { x: 9, y: 3 }, 'ARM': { x: 9, y: 6 }, 'RM': { x: 9, y: 8 }, 'LD': { x: 12, y: 1 }, 'LCD': { x: 12, y: 3 }, 'RCD': { x: 12, y: 6 }, 'RD': { x: 12, y: 8 } },
+    { 'CF': { x: 8, y: 3 }, 'CF2': { x: 8, y: 6 }, 'LM': { x: 10, y: 1 }, 'ALM': { x: 10, y: 3 }, 'ARM': { x: 10, y: 6 }, 'RM': { x: 10, y: 8 }, 'LD': { x: 13, y: 1 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 }, 'RD': { x: 13, y: 8 } },
+    { 'CF': { x: 9, y: 3 }, 'CF2': { x: 9, y: 6 }, 'LM': { x: 11, y: 1 }, 'ALM': { x: 11, y: 3 }, 'ARM': { x: 11, y: 6 }, 'RM': { x: 11, y: 8 }, 'LD': { x: 14, y: 1 }, 'LCD': { x: 14, y: 3 }, 'RCD': { x: 14, y: 6 }, 'RD': { x: 14, y: 8 } },
+    { 'CF': { x: 9, y: 3 }, 'CF2': { x: 9, y: 6 }, 'LM': { x: 11, y: 1 }, 'ALM': { x: 11, y: 3 }, 'ARM': { x: 11, y: 6 }, 'RM': { x: 11, y: 8 }, 'LD': { x: 15, y: 1 }, 'LCD': { x: 15, y: 3 }, 'RCD': { x: 15, y: 6 }, 'RD': { x: 15, y: 8 } },
+    { 'CF': { x: 9, y: 3 }, 'CF2': { x: 9, y: 6 }, 'LM': { x: 11, y: 1 }, 'ALM': { x: 11, y: 3 }, 'ARM': { x: 11, y: 6 }, 'RM': { x: 11, y: 8 }, 'LD': { x: 13, y: 1 }, 'LCD': { x: 13, y: 3 }, 'RCD': { x: 13, y: 6 }, 'RD': { x: 13, y: 8 } }
+];
+
+const playerDefenseFormations = [
+    { 'LD': { x: 3, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 3, y: 8 } },
+    { 'LD': { x: 3, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 3, y: 8 } },
+    { 'LD': { x: 4, y: 1 }, 'LCD': { x: 3, y: 3 }, 'RCD': { x: 3, y: 6 }, 'RD': { x: 4, y: 8 } },
+    { 'LD': { x: 5, y: 1 }, 'LCD': { x: 4, y: 3 }, 'RCD': { x: 4, y: 6 }, 'RD': { x: 5, y: 8 } },
+    { 'LD': { x: 5, y: 1 }, 'LCD': { x: 4, y: 3 }, 'RCD': { x: 4, y: 6 }, 'RD': { x: 5, y: 8 } },
+    { 'LD': { x: 6, y: 1 }, 'LCD': { x: 5, y: 3 }, 'RCD': { x: 5, y: 6 }, 'RD': { x: 6, y: 8 } },
+    { 'LD': { x: 6, y: 1 }, 'LCD': { x: 5, y: 3 }, 'RCD': { x: 5, y: 6 }, 'RD': { x: 6, y: 8 } },
+    { 'LD': { x: 6, y: 1 }, 'LCD': { x: 5, y: 3 }, 'RCD': { x: 5, y: 6 }, 'RD': { x: 6, y: 8 } }
+];
+
+// ВИПРАВЛЕНО: 8 кроків замість 1
+const defenseFormations = [
+    { 'CF': { x: 8, y: 3 }, 'CF2': { x: 8, y: 6 }, 'LM': { x: 6, y: 1 }, 'ALM': { x: 6, y: 3 }, 'ARM': { x: 6, y: 6 }, 'RM': { x: 6, y: 8 }, 'LD': { x: 3, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 3, y: 8 } },
+    { 'CF': { x: 9, y: 3 }, 'CF2': { x: 9, y: 6 }, 'LM': { x: 5, y: 1 }, 'ALM': { x: 5, y: 3 }, 'ARM': { x: 5, y: 6 }, 'RM': { x: 5, y: 8 }, 'LD': { x: 3, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 3, y: 8 } },
+    { 'CF': { x: 8, y: 3 }, 'CF2': { x: 8, y: 6 }, 'LM': { x: 4, y: 1 }, 'ALM': { x: 4, y: 3 }, 'ARM': { x: 4, y: 6 }, 'RM': { x: 4, y: 8 }, 'LD': { x: 2, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 2, y: 8 } },
+    { 'CF': { x: 8, y: 3 }, 'CF2': { x: 8, y: 6 }, 'LM': { x: 6, y: 1 }, 'ALM': { x: 6, y: 3 }, 'ARM': { x: 6, y: 6 }, 'RM': { x: 6, y: 8 }, 'LD': { x: 3, y: 1 }, 'LCD': { x: 3, y: 3 }, 'RCD': { x: 3, y: 6 }, 'RD': { x: 3, y: 8 } },
+    { 'CF': { x: 7, y: 3 }, 'CF2': { x: 7, y: 6 }, 'LM': { x: 5, y: 1 }, 'ALM': { x: 5, y: 3 }, 'ARM': { x: 5, y: 6 }, 'RM': { x: 5, y: 8 }, 'LD': { x: 2, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 2, y: 8 } },
+    { 'CF': { x: 6, y: 3 }, 'CF2': { x: 6, y: 6 }, 'LM': { x: 4, y: 1 }, 'ALM': { x: 4, y: 3 }, 'ARM': { x: 4, y: 6 }, 'RM': { x: 4, y: 8 }, 'LD': { x: 1, y: 1 }, 'LCD': { x: 1, y: 3 }, 'RCD': { x: 1, y: 6 }, 'RD': { x: 1, y: 8 } },
+    { 'CF': { x: 6, y: 3 }, 'CF2': { x: 6, y: 6 }, 'LM': { x: 4, y: 1 }, 'ALM': { x: 4, y: 3 }, 'ARM': { x: 4, y: 6 }, 'RM': { x: 4, y: 8 }, 'LD': { x: 0, y: 1 }, 'LCD': { x: 0, y: 3 }, 'RCD': { x: 0, y: 6 }, 'RD': { x: 0, y: 8 } },
+    { 'CF': { x: 6, y: 3 }, 'CF2': { x: 6, y: 6 }, 'LM': { x: 4, y: 1 }, 'ALM': { x: 4, y: 3 }, 'ARM': { x: 4, y: 6 }, 'RM': { x: 4, y: 8 }, 'LD': { x: 2, y: 1 }, 'LCD': { x: 2, y: 3 }, 'RCD': { x: 2, y: 6 }, 'RD': { x: 2, y: 8 } }
+];
+
+const attackFormations = {
+    '0_start': { ballHolder: 'ALM', positions: { 'LM': { x: 8, y: 1 }, 'ALM': { x: 6, y: 3 }, 'CF2': { x: 8, y: 3 }, 'CF': { x: 8, y: 6 }, 'ARM': { x: 9, y: 7 }, 'RM': { x: 8, y: 8 } } }
+};
+
+const opponentAttackFormations = {
+    '0_start': { ballHolder: 'ALM', positions: { 'LM': { x: 7, y: 1 }, 'ALM': { x: 9, y: 3 }, 'CF2': { x: 7, y: 3 }, 'CF': { x: 7, y: 6 }, 'ARM': { x: 6, y: 7 }, 'RM': { x: 7, y: 8 } } }
+};
+
+// ==========================================
+// GAME STATE
+// ==========================================
+const DEBUG_SKIP_FOUL_BET = false; // true = пропускати ставку після фолу (для дебагу), false = як має бути
+
+const gameState = {
+    phase: 'idle', isPlaying: false, difficulty: 'easy', betAmount: 10.00, chantLevel: 1,
+    ballHolder: null, attackingLine: [], attackDepth: 0, currentFormation: null,
+    defenseDepth: 0, opponentBallHolder: null, opponentFormation: null, opponentAttackingLine: [], defenseFailCounter: 0,
+    timer: 0, playerScore: 0, opponentScore: 0, multiplierLevel: 0,
+    ballPosition: { x: 7.5, y: 4.5 }, playerPositions: {}, opponentPositions: {},
+    availableChoices: [], winningCells: [], losingCells: [], specialCells: [], negativeCells: [], camX: 604,
+    nextKickoff: 'player', // 'player', 'opponent', 'throw_in', 'free_kick', 'defense_continue', 'opponent_strike', 'corner'
+    throwInFlank: 'upper', // 'upper' або 'lower' - фланг вкидання з ауту
+    strikeCells: [], // Strike Position - успішний пас → одразу удар
+    foulCells: [], // Foul Position - хибний вибір → штрафний
+    opponentStrikeCells: [], // Strike Position суперника - losing cell → одразу удар суперника
+    strikePositionGoal: false, // Флаг що це Strike Position гол (продовжуємо атаку)
+    isStrikePositionTransition: false, // Флаг що ми в транзішні після Strike Position голу
+    foulBallHolder: null, // Зберігаємо ball holder для штрафного після зміни ставки
+    foulPosition: null, // Позиція де був фол
+    hardModeFlankOrCenter: 'flank', // Для Hard режиму: 'flank' (1,8) або 'center' (3,6)
+    pendingOpponentStrike: false, // Чи це Strike Position удар суперника
+    pendingCornerFlank: 'upper', // Фланг для кутового
+    matchStarted: false, // Чи матч вже почався (таймер запущено)
+    matchEnded: false, // Чи матч закінчився
+    isOvertimeRound: false // Чи це останній раунд після 90:00
+};
+
+const playerRegistry = [];
+let timerInterval = null;
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
+window.onload = () => {
+    // Ініціалізація звуків
+    sfx = new FootballSFX();
+    
+    // Ініціалізація трибун
+    initCrowd();
+    requestAnimationFrame(renderCrowd);
+    
+    createGrid();
+    setupFormation('kickoff_left');
+    buildMultiplierRail();
+    setupControls();
+    updateBetDisplay();
+    requestAnimationFrame(renderLoop);
+};
+
+// Resize handler для трибун
+let crowdResizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(crowdResizeTimeout);
+    crowdResizeTimeout = setTimeout(() => {
+        initCrowd();
+    }, 100);
+});
+
+function createGrid() {
+    const layer = document.getElementById('grid-layer');
+    layer.innerHTML = '';
+    const cols = 'ABCDEFGHIJKLMNOP';
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const c = document.createElement('div');
+            c.className = 'cell';
+            c.style.left = (x * CELL_W) + 'px';
+            c.style.top = (y * CELL_H) + 'px';
+            c.dataset.x = x; c.dataset.y = y;
+            c.onclick = () => handleCellClick({ x, y });
+            c.onmouseenter = () => showHoverArrow({ x, y });
+            c.onmouseleave = () => hideHoverArrow();
+            
+            // Додаємо підпис клітинки
+            const label = document.createElement('span');
+            label.className = 'cell-label';
+            label.textContent = cols[x] + (y + 1);
+            c.appendChild(label);
+            
+            layer.appendChild(c);
+        }
+    }
+    const hoverArrow = document.createElement('div');
+    hoverArrow.id = 'hover-arrow';
+    hoverArrow.className = 'hover-arrow';
+    hoverArrow.style.display = 'none';
+    document.getElementById('field-board').appendChild(hoverArrow);
+}
+
+function showHoverArrow(pos) {
+    if (!gameState.isPlaying || !gameState.availableChoices.some(c => c.x === pos.x && c.y === pos.y)) return;
+    const arrow = document.getElementById('hover-arrow');
+    if (!arrow) return;
+    
+    let from;
+    if (gameState.phase === 'opponent_strike') {
+        // При ударі суперника - стрілка від голкіпера (фіксована позиція)
+        from = { x: 0, y: 4.5 };
+    } else if (gameState.phase === 'defense') {
+        // В захисті стрілка від мого гравця зліва від цілі
+        const interceptX = pos.x - 1;
+        let closestDefender = null;
+        let minDist = Infinity;
+        
+        for (const [p, coords] of Object.entries(gameState.playerPositions)) {
+            if (p === 'GK') continue;
+            const dist = Math.abs(coords.x - interceptX) + Math.abs(coords.y - pos.y);
+            if (dist < minDist) {
+                minDist = dist;
+                closestDefender = coords;
+            }
+        }
+        from = closestDefender || gameState.ballPosition;
+    } else {
+        // В атаці стрілка від м'яча
+        from = gameState.ballPosition;
+    }
+    
+    const x1 = from.x * CELL_W + CELL_W/2, y1 = from.y * CELL_H + CELL_H/2;
+    const x2 = pos.x * CELL_W + CELL_W/2, y2 = pos.y * CELL_H + CELL_H/2;
+    arrow.style.width = Math.hypot(x2-x1, y2-y1) + 'px';
+    arrow.style.left = x1 + 'px'; arrow.style.top = y1 + 'px';
+    arrow.style.transform = `translateZ(5px) rotate(${Math.atan2(y2-y1, x2-x1) * 180 / Math.PI}deg)`;
+    arrow.style.display = 'block';
+}
+
+function hideHoverArrow() { const arrow = document.getElementById('hover-arrow'); if (arrow) arrow.style.display = 'none'; }
+
+function setupFormation(type) {
+    const f = FORMATIONS[type];
+    const container = document.getElementById('entities-layer');
+    container.innerHTML = '<div id="ball"></div>';
+    playerRegistry.length = 0;
+    for (let p in f.team1) { createEntity(p, f.team1[p], 'team1'); gameState.playerPositions[p] = { ...f.team1[p] }; }
+    for (let p in f.team2) { createEntity(p, f.team2[p], 'team2'); gameState.opponentPositions[p] = { ...f.team2[p] }; }
+    updateBallPosition(f.ball);
+}
+
+function createEntity(pos, coords, team) {
+    const el = document.createElement('div');
+    el.className = `player-3d player-${team}`;
+    if (pos === 'GK') el.classList.add('goalkeeper');
+    el.dataset.position = pos;
+    el.dataset.team = team;
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'p-canvas';
+    canvas.width = 200;
+    canvas.height = 360;
+    el.appendChild(document.createElement('div')).className = 'p-shadow';
+    el.appendChild(canvas);
+    
+    // Додаємо підпис позиції
+    const label = document.createElement('div');
+    label.className = 'p-label';
+    label.textContent = pos;
+    el.appendChild(label);
+
+    document.getElementById('entities-layer').appendChild(el);
+    setEntityPos(el, coords.x, coords.y);
+
+    let shirtColor = '#fbbf24';
+    if (team === 'team1') shirtColor = '#4A9EFF';
+    else if (team === 'team2') shirtColor = '#FF4A4A';
+    if (pos === 'GK') shirtColor = '#FFD700';
+
+    playerRegistry.push({
+        el, ctx: canvas.getContext('2d'), mode: 'idle', time: Math.random() * 10,
+        kit: { shirt: shirtColor, shorts: '#fff', socks: '#fff', skin: '#ffdbac', boots: '#111' },
+        lastTransform: null, kickTimer: 0,
+        gridX: coords.x, gridY: coords.y, facingRight: true, team,
+        moveDirection: null
+    });
+}
+
+function setEntityPos(el, x, y, z = 0) {
+    const px = x * CELL_W + (CELL_W / 2), py = y * CELL_H + (CELL_H / 2);
+    let ox = 0, oy = 0;
+    if (el.id === 'ball') { ox = 5; oy = 5; }
+    el.style.zIndex = Math.floor(y * 10);
+    el.style.transform = `translate3d(${px - ox}px, ${py - oy}px, ${z}px)`;
+}
+
+function movePlayerTo(team, pos, coords) {
+    const el = document.querySelector(`.player-${team}[data-position="${pos}"]`);
+    if (el) {
+        const p = playerRegistry.find(r => r.el === el);
+        if (p) {
+            const dx = coords.x - p.gridX;
+            // Зберігаємо напрямок руху
+            if (dx > 0.1) p.moveDirection = 'right';
+            else if (dx < -0.1) p.moveDirection = 'left';
+            p.gridX = coords.x;
+            p.gridY = coords.y;
+        }
+        setEntityPos(el, coords.x, coords.y);
+    }
+    if (team === 'team1') gameState.playerPositions[pos] = { ...coords };
+    else gameState.opponentPositions[pos] = { ...coords };
+}
+
+function updateBallPosition(coords) {
+    const ball = document.getElementById('ball');
+    if (ball) { setEntityPos(ball, coords.x, coords.y, 7); gameState.ballPosition = { ...coords }; }
+}
+
+// ==========================================
+// RENDER LOOP
+// ==========================================
+function renderLoop() {
+    let targetX = gameState.ballPosition.x * CELL_W;
+    targetX = Math.max(200, Math.min(1000, targetX));
+    if (gameState.phase === 'attack') targetX += 150;
+    if (gameState.phase === 'strike') {
+        // Камера між м'ячем і клітинками удару (x=15)
+        const strikeX = 15 * CELL_W;
+        targetX = (gameState.ballPosition.x * CELL_W + strikeX) / 2 + 100;
+    }
+    if (gameState.phase === 'defense' || gameState.phase === 'opponent_strike') targetX -= 150;
+    gameState.camX += (targetX - gameState.camX) * 0.05;
+    document.getElementById('world-container').style.transform = `translateX(${-(gameState.camX - FIELD_W/2)}px)`;
+
+    playerRegistry.forEach(p => {
+        p.ctx.clearRect(0, 0, 200, 360);
+        const currentTransform = window.getComputedStyle(p.el).transform;
+        if (p.kickTimer > 0) { p.kickTimer--; if (p.kickTimer <= 0) p.mode = 'idle'; }
+        
+        // Визначаємо чи рухається гравець
+        const isMoving = p.lastTransform && p.lastTransform !== currentTransform && currentTransform !== 'none';
+        
+        if (isMoving) {
+            if (p.mode !== 'kick') p.mode = 'run';
+            // Під час руху дивимось в напрямку руху
+            if (p.moveDirection === 'right') p.facingRight = true;
+            else if (p.moveDirection === 'left') p.facingRight = false;
+        } else { 
+            if (p.mode === 'run') {
+                p.mode = 'idle';
+                p.moveDirection = null; // Скидаємо напрямок руху
+            }
+            // В idle дивимось на м'яч
+            if (p.mode === 'idle') {
+                const ballX = gameState.ballPosition.x;
+                if (Math.abs(ballX - p.gridX) > 0.1) {
+                    p.facingRight = ballX > p.gridX;
+                }
+            }
+        }
+        p.lastTransform = currentTransform;
+        
+        p.time += ANIMATIONS[p.mode].speed;
+        p.ctx.save();
+        p.ctx.translate(100, 230);
+        
+        // Віддзеркалення якщо дивимось вліво
+        if (!p.facingRight) {
+            p.ctx.scale(-0.5, 0.5);
+        } else {
+            p.ctx.scale(0.5, 0.5);
+        }
+        
+        const bobbing = Math.abs(Math.cos(p.time)) * (p.mode === 'run' ? 15 : 2);
+        drawFootballer(p.ctx, 0, 0 - bobbing, p.mode, p.time, p.kit);
+        p.ctx.restore();
+    });
+    requestAnimationFrame(renderLoop);
+}
+
+// ==========================================
+// UI FUNCTIONS
+// ==========================================
+function updatePhaseDisplay(phase, instruction) {
+    const banner = document.getElementById('phase-banner');
+    const descEl = document.getElementById('phase-desc');
+    const hexagon = document.getElementById('phase-hexagon');
+    
+    if (banner) {
+        banner.textContent = phase;
+        banner.className = phase.includes('ATTACK') || phase.includes('GOAL') ? 'txt-attack' : phase.includes('DEFENSE') ? 'txt-defense' : 'txt-strike';
+    }
+    if (descEl) descEl.textContent = instruction;
+    
+    // Оновлюємо шестикутник
+    let label = phase;
+    let mult = '';
+    let colorClass = 'color-bet';
+    let shouldPulse = false;
+    
+    if (phase === 'ATTACK' || phase === 'KICKOFF...') {
+        label = 'PASS';
+        mult = `${getNextMultiplier().toFixed(2)}x`;
+        colorClass = 'color-pass';
+        shouldPulse = true;
+    } else if (phase === 'STRIKE' || phase === 'FREE KICK') {
+        label = 'STRIKE';
+        mult = `${getNextMultiplier().toFixed(2)}x`;
+        colorClass = 'color-strike';
+        shouldPulse = true;
+    } else if (phase === 'SAVE') {
+        label = 'SAVE';
+        mult = `${getNextMultiplier().toFixed(2)}x`;
+        colorClass = 'color-strike'; // Жовтий як клітинки
+        shouldPulse = true;
+    } else if (phase === 'DEFENSE') {
+        label = 'DEFENSE';
+        mult = `${getNextMultiplier().toFixed(2)}x`;
+        colorClass = 'color-defense';
+        shouldPulse = true;
+    } else if (phase.includes('GOAL')) {
+        label = 'GOAL';
+        mult = '⚽';
+        colorClass = 'color-goal';
+        shouldPulse = false;
+    } else if (phase.includes('WIN')) {
+        label = 'WIN';
+        mult = '🎉';
+        colorClass = 'color-goal';
+        shouldPulse = false;
+    } else if (phase === 'PLACE') {
+        label = 'PLACE';
+        mult = 'BET';
+        colorClass = 'color-bet';
+        shouldPulse = false;
+    } else {
+        // Для інших фаз теж показуємо мультиплікатор
+        mult = `${getNextMultiplier().toFixed(2)}x`;
+        colorClass = 'color-pass';
+        shouldPulse = true;
+    }
+    
+    // Встановлюємо колір та анімацію шестикутника
+    if (hexagon) {
+        hexagon.className = shouldPulse ? `pulse ${colorClass}` : colorClass;
+    }
+    
+    updatePhaseHexagon(label, mult, instruction);
+    updateCashoutButton();
+}
+
+function updateScore() { document.getElementById('score').textContent = `${gameState.playerScore} - ${gameState.opponentScore}`; }
+
+function buildMultiplierRail() {
+    const rail = document.getElementById('multiplier-rail');
+    rail.innerHTML = '';
+    const chantMultiplier = CHANT_LEVELS[gameState.chantLevel].ladderMultiplier;
+    DIFFICULTY_SETTINGS[gameState.difficulty].multipliers.forEach(m => {
+        const pill = document.createElement('div');
+        pill.className = 'mult-pill';
+        pill.textContent = `×${(m * chantMultiplier).toFixed(2)}`;
+        rail.appendChild(pill);
+    });
+}
+
+function updateMultiplierDisplay() {
+    document.querySelectorAll('.mult-pill').forEach((pill, i) => {
+        pill.classList.remove('active', 'passed');
+        if (i < gameState.multiplierLevel) pill.classList.add('passed');
+        if (i === gameState.multiplierLevel) pill.classList.add('active');
+    });
+    // Оновлюємо cashout кнопку (якщо вона видима)
+    updateCashoutButton();
+}
+
+function updateMainButton() {
+    // Оновлюємо обидві панелі
+    if (!gameState.isPlaying) {
+        showBetUI();
+    } else {
+        showGameUI();
+    }
+}
+
+function highlightAvailableCells() {
+    const isStrikePhase = gameState.phase === 'strike' || gameState.phase === 'opponent_strike';
+    
+    document.querySelectorAll('.cell').forEach(c => {
+        c.classList.remove('selectable', 'winning', 'losing', 'special', 'negative', 'strike-phase');
+        // Видаляємо старі маркери
+        const oldStrikeMarker = c.querySelector('.strike-marker');
+        if (oldStrikeMarker) oldStrikeMarker.remove();
+        const oldFoulMarker = c.querySelector('.foul-marker');
+        if (oldFoulMarker) oldFoulMarker.remove();
+        const oldCornerMarker = c.querySelector('.corner-marker');
+        if (oldCornerMarker) oldCornerMarker.remove();
+        const oldOpponentStrikeMarker = c.querySelector('.opponent-strike-marker');
+        if (oldOpponentStrikeMarker) oldOpponentStrikeMarker.remove();
+    });
+    gameState.availableChoices.forEach(pos => {
+        const cell = document.querySelector(`.cell[data-x="${pos.x}"][data-y="${pos.y}"]`);
+        if (cell) {
+            cell.classList.add('selectable');
+            if (isStrikePhase) cell.classList.add('strike-phase');
+            if (gameState.winningCells.some(c => c.x === pos.x && c.y === pos.y)) cell.classList.add('winning');
+            else if (gameState.losingCells.some(c => c.x === pos.x && c.y === pos.y)) cell.classList.add('losing');
+            if (gameState.specialCells.some(c => c.x === pos.x && c.y === pos.y)) cell.classList.add('special');
+            if (gameState.negativeCells.some(c => c.x === pos.x && c.y === pos.y)) cell.classList.add('negative');
+            
+            // Додаємо маркер для Strike Position (атака)
+            if (gameState.strikeCells && gameState.strikeCells.some(c => c.x === pos.x && c.y === pos.y)) {
+                const marker = document.createElement('div');
+                marker.className = 'strike-marker';
+                cell.appendChild(marker);
+            }
+            
+            // Додаємо маркер для Foul Position
+            if (gameState.foulCells && gameState.foulCells.some(c => c.x === pos.x && c.y === pos.y)) {
+                const marker = document.createElement('div');
+                marker.className = 'foul-marker';
+                cell.appendChild(marker);
+            }
+
+            // Додаємо маркер для Corner/Special
+            if (gameState.specialCells && gameState.specialCells.some(c => c.x === pos.x && c.y === pos.y)) {
+                const marker = document.createElement('div');
+                marker.className = 'corner-marker';
+                cell.appendChild(marker);
+            }
+            
+            // Додаємо маркер для Strike суперника (оборона)
+            if (gameState.opponentStrikeCells && gameState.opponentStrikeCells.some(c => c.x === pos.x && c.y === pos.y)) {
+                const marker = document.createElement('div');
+                marker.className = 'opponent-strike-marker';
+                cell.appendChild(marker);
+            }
+        }
+    });
+}
+
+function setupControls() {
+    // Play button
+    document.getElementById('btn-main').onclick = () => { 
+        if (!gameState.isPlaying) startGame(); 
+    };
+    
+    // Cashout button
+    document.getElementById('btn-cashout').onclick = () => { 
+        if (gameState.isPlaying && gameState.multiplierLevel > 0) {
+            cashout(); 
+        }
+    };
+    
+    // Bet controls
+    document.getElementById('btn-inc').onclick = () => { if (!gameState.isPlaying) { gameState.betAmount = Math.min(1000, gameState.betAmount + 10); updateBetDisplay(); } };
+    document.getElementById('btn-dec').onclick = () => { if (!gameState.isPlaying) { gameState.betAmount = Math.max(1, gameState.betAmount - 10); updateBetDisplay(); } };
+    document.getElementById('btn-half').onclick = () => { if (!gameState.isPlaying) { gameState.betAmount = Math.max(1, gameState.betAmount / 2); updateBetDisplay(); } };
+    document.getElementById('btn-double').onclick = () => { if (!gameState.isPlaying) { gameState.betAmount = Math.min(1000, gameState.betAmount * 2); updateBetDisplay(); } };
+    
+    // Difficulty tabs
+    document.querySelectorAll('.diff-tab').forEach(tab => {
+        tab.onclick = () => { if (gameState.isPlaying) return; document.querySelectorAll('.diff-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); gameState.difficulty = tab.dataset.d; buildMultiplierRail(); };
+    });
+    
+    // Chant Level buttons
+    document.querySelectorAll('.chant-btn').forEach(btn => {
+        btn.onclick = () => {
+            if (gameState.isPlaying) return;
+            document.querySelectorAll('.chant-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            gameState.chantLevel = parseInt(btn.dataset.level);
+            updateBetDisplay();
+            buildMultiplierRail();
+            
+            // Оновлюємо стан трибун
+            updateCrowdState(gameState.chantLevel);
+            
+            // Bounce анімація для мультиплікаторів
+            document.querySelectorAll('.mult-pill').forEach(pill => {
+                pill.classList.remove('bounce');
+                void pill.offsetWidth; // Trigger reflow
+                pill.classList.add('bounce');
+            });
+        };
+    });
+    
+    document.getElementById('restart-btn').onclick = () => location.reload();
+}
+
+// Показати/сховати панелі
+function showGameUI() {
+    const controlsBar = document.getElementById('controls-bar');
+    const cashoutBar = document.getElementById('cashout-bar');
+    if (controlsBar) controlsBar.classList.add('hidden');
+    if (cashoutBar) cashoutBar.classList.add('visible');
+    updateCashoutButton();
+}
+
+function showBetUI() {
+    // Перевіряємо чи матч закінчився (overtime раунд завершено)
+    if (gameState.isOvertimeRound && !gameState.isPlaying) {
+        endMatch();
+        return;
+    }
+    
+    const controlsBar = document.getElementById('controls-bar');
+    const cashoutBar = document.getElementById('cashout-bar');
+    if (controlsBar) controlsBar.classList.remove('hidden');
+    if (cashoutBar) cashoutBar.classList.remove('visible');
+    
+    // Завжди показуємо PLACE BET на панелі ставки
+    const hexagon = document.getElementById('phase-hexagon');
+    if (hexagon) hexagon.className = 'color-bet';
+    updatePhaseHexagon('PLACE', 'BET', '');
+}
+
+// Завершення матчу
+function endMatch() {
+    gameState.matchEnded = true;
+    gameState.isPlaying = false;
+    stopTimer();
+    
+    // Визначаємо результат
+    let resultText;
+    if (gameState.playerScore > gameState.opponentScore) {
+        resultText = 'YOU WIN!';
+    } else if (gameState.playerScore < gameState.opponentScore) {
+        resultText = 'YOU LOSE';
+    } else {
+        resultText = 'DRAW';
+    }
+    
+    // Показуємо фінальний екран
+    updatePhaseDisplay('FULL TIME', `${gameState.playerScore} - ${gameState.opponentScore}`);
+    updatePhaseHexagon(resultText, `${gameState.playerScore}-${gameState.opponentScore}`, 'MATCH OVER');
+    
+    const hexagon = document.getElementById('phase-hexagon');
+    if (hexagon) hexagon.className = 'color-goal';
+    
+    // Ховаємо контроли
+    const controlsBar = document.getElementById('controls-bar');
+    const cashoutBar = document.getElementById('cashout-bar');
+    if (controlsBar) controlsBar.classList.add('hidden');
+    if (cashoutBar) cashoutBar.classList.remove('visible');
+    
+    // Показуємо кнопку нового матчу
+    setTimeout(() => {
+        showNewMatchButton();
+    }, 2000);
+}
+
+// Показуємо кнопку нового матчу
+function showNewMatchButton() {
+    const controlsBar = document.getElementById('controls-bar');
+    if (controlsBar) controlsBar.classList.remove('hidden');
+    
+    // Змінюємо текст кнопки PLAY на NEW MATCH
+    const playBtn = document.getElementById('btn-main');
+    if (playBtn) {
+        const textEl = playBtn.querySelector('.play-text');
+        if (textEl) textEl.textContent = 'NEW MATCH';
+    }
+    
+    updatePhaseHexagon('NEW', 'MATCH', '');
+}
+
+// Оновлення cashout кнопки
+function updateCashoutButton() {
+    const btn = document.getElementById('btn-cashout');
+    if (!btn) return;
+    const textEl = btn.querySelector('.cashout-text');
+    
+    // Cashout активний якщо є здобутий мультиплікатор (multiplierLevel > 0)
+    // і гра триває (isPlaying)
+    if (gameState.multiplierLevel > 0 && gameState.isPlaying) {
+        btn.classList.add('active');
+        const mult = getCurrentMultiplier();
+        if (textEl) textEl.textContent = `CASHOUT ${mult.toFixed(2)}x`;
+    } else {
+        btn.classList.remove('active');
+        if (textEl) textEl.textContent = 'CASHOUT';
+    }
+}
+
+// Отримати поточний мультиплікатор з урахуванням Chant Level
+function getCurrentMultiplier() {
+    const baseMultipliers = DIFFICULTY_SETTINGS[gameState.difficulty].multipliers;
+    const chantMultiplier = CHANT_LEVELS[gameState.chantLevel].ladderMultiplier;
+    const level = Math.max(0, gameState.multiplierLevel - 1);
+    return baseMultipliers[level] * chantMultiplier;
+}
+
+// Отримати наступний мультиплікатор
+function getNextMultiplier() {
+    const baseMultipliers = DIFFICULTY_SETTINGS[gameState.difficulty].multipliers;
+    const chantMultiplier = CHANT_LEVELS[gameState.chantLevel].ladderMultiplier;
+    const level = Math.min(gameState.multiplierLevel, baseMultipliers.length - 1);
+    return baseMultipliers[level] * chantMultiplier;
+}
+
+// Оновлення шестикутника
+function updatePhaseHexagon(label, mult, desc) {
+    const labelEl = document.querySelector('#phase-hexagon .phase-label');
+    const multEl = document.querySelector('#phase-hexagon .phase-mult');
+    const descEl = document.getElementById('phase-desc');
+    
+    if (labelEl) labelEl.textContent = label;
+    if (multEl) multEl.textContent = mult;
+    if (descEl) descEl.textContent = desc;
+}
+
+// Блокування/розблокування контролів ставки та складності
+function setControlsLocked(locked) {
+    const opacity = locked ? '0.5' : '1';
+    const pointerEvents = locked ? 'none' : 'auto';
+    
+    document.getElementById('btn-inc').style.opacity = opacity;
+    document.getElementById('btn-dec').style.opacity = opacity;
+    document.getElementById('btn-half').style.opacity = opacity;
+    document.getElementById('btn-double').style.opacity = opacity;
+    document.getElementById('bet-display').style.opacity = opacity;
+    
+    document.querySelectorAll('.diff-tab').forEach(tab => {
+        tab.style.opacity = opacity;
+        tab.style.pointerEvents = pointerEvents;
+    });
+    
+    document.querySelectorAll('.chant-btn').forEach(btn => {
+        btn.style.opacity = opacity;
+        btn.style.pointerEvents = pointerEvents;
+    });
+}
+
+function updateBetDisplay() { 
+    const baseBet = gameState.betAmount;
+    const chant = CHANT_LEVELS[gameState.chantLevel];
+    const totalBet = baseBet * chant.betMultiplier;
+    
+    const betDisplay = document.getElementById('bet-display');
+    if (betDisplay) betDisplay.value = `$${baseBet.toFixed(2)}`;
+    
+    const totalBetEl = document.getElementById('total-bet');
+    if (totalBetEl) {
+        if (gameState.chantLevel === 1) {
+            // Chant OFF - ховаємо total bet
+            totalBetEl.style.display = 'none';
+        } else {
+            totalBetEl.style.display = 'block';
+            totalBetEl.textContent = `TOTAL BET: $${totalBet.toFixed(2)}`;
+            totalBetEl.className = `chant-${gameState.chantLevel}`;
+        }
+    }
+}
+
+// ==========================================
+// GAME FLOW
+// ==========================================
+function startGame() {
+    // Якщо матч закінчився - починаємо новий
+    if (gameState.matchEnded) {
+        resetMatch();
+    }
+    
+    // Свисток судді
+    if (sfx) sfx.playWhistle();
+    
+    gameState.isPlaying = true; 
+    gameState.currentFormation = null;
+    
+    // Блокуємо контроли ставки та складності
+    setControlsLocked(true);
+    
+    // Показуємо ігровий UI (cashout кнопка)
+    showGameUI();
+    
+    // Оновлюємо текст кнопки PLAY (якщо був NEW MATCH)
+    const playBtn = document.getElementById('btn-main');
+    if (playBtn) {
+        const textEl = playBtn.querySelector('.play-text');
+        if (textEl) textEl.textContent = 'PLAY';
+    }
+    
+    updateScore(); 
+    startTimer(); // Запускається тільки при першому виклику в матчі
+    
+    // Перевіряємо хто розігрує м'яч
+    if (gameState.nextKickoff === 'opponent') {
+        // М'яч у суперника з центру - починаємо з захисту
+        gameState.attackDepth = 0;
+        gameState.defenseDepth = 0;
+        gameState.phase = 'defense';
+        setupDefenseFormation();
+        updatePhaseDisplay('DEFENSE', 'INTERCEPT THE PASS');
+        setTimeout(() => generateDefenseTargets(), 500);
+    } else if (gameState.nextKickoff === 'defense_continue') {
+        // Продовжуємо захист з поточної позиції (після хибного вибору в захисті)
+        // defenseDepth вже встановлено, гравці вже на позиціях
+        gameState.phase = 'defense';
+        updatePhaseDisplay('DEFENSE', 'INTERCEPT THE PASS');
+        setTimeout(() => generateDefenseTargets(), 500);
+    } else if (gameState.nextKickoff === 'opponent_strike') {
+        // Удар суперника по воротах (після хибного вибору на Strike Position)
+        opponentShoot(gameState.pendingOpponentStrike || false);
+    } else if (gameState.nextKickoff === 'corner') {
+        // Кутовий удар (після хибного вибору на corner cell)
+        setupCornerKickFormation(gameState.pendingCornerFlank || 'upper');
+    } else if (gameState.nextKickoff === 'throw_in') {
+        // Аут - суперник вкидає, анімуємо пас і переходимо в захист
+        gameState.attackDepth = 0;
+        gameState.defenseDepth = 0;
+        animateThrowIn(() => {
+            gameState.phase = 'defense';
+            updatePhaseDisplay('DEFENSE', 'INTERCEPT THE PASS');
+            setTimeout(() => generateDefenseTargets(), 500);
+        });
+    } else if (gameState.nextKickoff === 'free_kick') {
+        // Штрафний удар після фолу - одразу удар
+        gameState.ballHolder = gameState.foulBallHolder;
+        gameState.strikePositionGoal = true;
+        updatePhaseDisplay('FREE KICK', 'SELECT AN AREA TO SHOOT');
+        setTimeout(() => startStrikePhase(), 500);
+    } else {
+        // М'яч у нас - починаємо з атаки
+        gameState.attackDepth = 0;
+        gameState.defenseDepth = 0;
+        gameState.multiplierLevel = 0;
+        setupFormation('kickoff_left');
+        animatePlayerKickoff(() => startAttackPhase());
+    }
+    
+    // Скидаємо на player для наступного разу (якщо не буде голу)
+    gameState.nextKickoff = 'player';
+}
+
+// Скидання стану для нового матчу
+function resetMatch() {
+    stopTimer();
+    
+    gameState.timer = 0;
+    gameState.playerScore = 0;
+    gameState.opponentScore = 0;
+    gameState.multiplierLevel = 0;
+    gameState.attackDepth = 0;
+    gameState.defenseDepth = 0;
+    gameState.defenseFailCounter = 0;
+    gameState.matchStarted = false;
+    gameState.matchEnded = false;
+    gameState.isOvertimeRound = false;
+    gameState.nextKickoff = 'player';
+    gameState.phase = 'idle';
+    
+    updateTimerDisplay();
+    updateScore();
+    updateMultiplierDisplay();
+    setupFormation('kickoff_left');
+}
+
+// Анімація вкидання з ауту суперником
+function animateThrowIn(callback) {
+    const flank = gameState.throwInFlank || 'upper';
+    const throwInPlayer = flank === 'upper' ? 'LM' : 'RM';
+    const targetPos = flank === 'upper' ? { x: 9, y: 3 } : { x: 9, y: 6 };
+    const throwInPlayerNewPos = flank === 'upper' ? { x: 7, y: 1 } : { x: 7, y: 8 };
+    
+    updatePhaseDisplay('DEFENSE', 'THROW-IN...');
+    
+    // Анімуємо пас від LM/RM до ALM
+    setTimeout(() => {
+        // М'яч летить до ALM
+        updateBallPosition(targetPos);
+        
+        // Гравець що вкидав біжить на свою позицію
+        movePlayerTo('team2', throwInPlayer, throwInPlayerNewPos);
+        
+        // ALM отримує м'яч
+        gameState.opponentBallHolder = 'ALM';
+        
+        setTimeout(callback, 600);
+    }, 300);
+}
+
+function animatePlayerKickoff(callback) {
+    updatePhaseDisplay('ATTACK', 'KICKOFF...');
+    updateBallPosition({ x: 6, y: 3 });
+    gameState.ballHolder = 'ALM'; gameState.attackDepth = 0; gameState.currentFormation = attackFormations['0_start'];
+    setTimeout(() => {
+        Object.entries(attackFormations['0_start'].positions).forEach(([player, coords]) => movePlayerTo('team1', player, coords));
+        setTimeout(() => moveOpponentsToStep(0), 50);
+        setTimeout(callback, 500);
+    }, 300);
+}
+
+function cashout() {
+    const mult = getCurrentMultiplier();
+    const chant = CHANT_LEVELS[gameState.chantLevel];
+    const totalBet = gameState.betAmount * chant.betMultiplier;
+    const winAmount = totalBet * mult;
+    
+    // Свисток + оплески
+    if (sfx) {
+        sfx.playWhistle();
+        setTimeout(() => sfx.playCashout(), 300);
+    }
+    
+    updatePhaseDisplay('WIN!', `CASHED OUT $${winAmount.toFixed(2)}`);
+    updatePhaseHexagon('WIN', `$${winAmount.toFixed(2)}`, '');
+    document.querySelectorAll('.cell').forEach(c => c.classList.remove('selectable', 'winning', 'losing'));
+    
+    // Визначаємо фланг ball holder для анімації вибивання
+    const ballHolderPos = gameState.playerPositions[gameState.ballHolder] || gameState.ballPosition;
+    const isUpperFlank = ballHolderPos.y <= 4;
+    
+    // Вибиваємо м'яч в аут - в районі центру поля
+    const outPosition = isUpperFlank ? { x: 9, y: 0 } : { x: 9, y: 9 };
+    gameState.throwInFlank = isUpperFlank ? 'upper' : 'lower';
+    
+    // Анімація вибивання м'яча
+    updateBallPosition(outPosition);
+    
+    setTimeout(() => {
+        // Скидаємо мультиплікатор до 0
+        gameState.multiplierLevel = 0;
+        gameState.attackDepth = 0;
+        gameState.defenseDepth = 0;
+        gameState.defenseFailCounter = 0;
+        gameState.availableChoices = [];
+        gameState.winningCells = [];
+        gameState.losingCells = [];
+        
+        // Зупиняємо гру
+        gameState.isPlaying = false;
+        gameState.phase = 'idle';
+        gameState.nextKickoff = 'throw_in'; // Суперник вкидає з ауту
+        
+        // Формація для throw-in суперника
+        setupThrowInFormation(gameState.throwInFlank);
+        
+        // Показуємо bet UI
+        highlightAvailableCells();
+        setControlsLocked(false);
+        updateMultiplierDisplay();
+        showBetUI();
+    }, 800);
+}
+
+// Формація для вкидання з ауту суперником
+function setupThrowInFormation(flank) {
+    // Гравець суперника на позиції вкидання
+    const throwInPlayer = flank === 'upper' ? 'LM' : 'RM';
+    const throwInPos = flank === 'upper' ? { x: 9, y: 0 } : { x: 9, y: 9 };
+    
+    // Рухаємо гравця на позицію вкидання
+    movePlayerTo('team2', throwInPlayer, throwInPos);
+    updateBallPosition(throwInPos);
+    
+    // Позиція ALM суперника - отримувач пасу
+    const almPos = flank === 'upper' ? { x: 9, y: 3 } : { x: 9, y: 6 };
+    movePlayerTo('team2', 'ALM', almPos);
+    
+    // Решта суперників на базових позиціях
+    // CF2 - верхній фланг (y=3), CF - нижній фланг (y=6)
+    const otherPositions = {
+        'CF2': { x: 7, y: 3 },
+        'CF': { x: 7, y: 6 },
+        'ARM': { x: 6, y: 7 },
+        'LD': { x: 12, y: 1 },
+        'LCD': { x: 13, y: 3 },
+        'RCD': { x: 13, y: 6 },
+        'RD': { x: 12, y: 8 }
+    };
+    
+    if (flank === 'upper') {
+        otherPositions['RM'] = { x: 7, y: 8 };
+    } else {
+        otherPositions['LM'] = { x: 7, y: 1 };
+    }
+    
+    Object.entries(otherPositions).forEach(([pos, coords]) => {
+        movePlayerTo('team2', pos, coords);
+    });
+    
+    // Мої гравці в оборонній позиції
+    const defFormation = defenseFormations[0];
+    Object.entries(defFormation).forEach(([pos, coords]) => {
+        movePlayerTo('team1', pos, coords);
+    });
+}
+
+function startTimer() { 
+    // Таймер запускається тільки один раз на початку матчу
+    if (gameState.matchStarted) return; // Вже запущено
+    
+    gameState.matchStarted = true;
+    gameState.timer = 0; // Починаємо з 0 (00:00)
+    updateTimerDisplay(); 
+    
+    // 3 хв реального часу = 90 хв ігрового часу
+    // 30 ігрових секунд за 1 реальну секунду
+    // Оновлюємо кожні ~33ms щоб секунди набігали плавно (1 ігрова секунда за ~33ms)
+    timerInterval = setInterval(() => { 
+        gameState.timer += 1; // +1 ігрова секунда
+        updateTimerDisplay();
+        
+        // Перевіряємо чи досягли 90 хвилин (5400 секунд)
+        if (gameState.timer >= 5400 && !gameState.isOvertimeRound) {
+            gameState.isOvertimeRound = true; // Позначаємо що наступний раунд - останній
+        }
+    }, 33); // ~30 разів на секунду (1000ms / 30 ≈ 33ms)
+}
+function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
+function updateTimerDisplay() { 
+    const minutes = Math.floor(gameState.timer / 60);
+    const seconds = gameState.timer % 60;
+    const display = minutes >= 90 
+        ? `90:00+` 
+        : `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    document.getElementById('timer').textContent = display;
+}
+
+// ==========================================
+// ATTACK PHASE
+// ==========================================
+function startAttackPhase() { gameState.phase = 'attack'; updatePhaseDisplay('ATTACK', 'SELECT PASS TARGET'); generatePassTargets(); updateMultiplierDisplay(); }
+
+function generatePassTargets() {
+    const settings = DIFFICULTY_SETTINGS[gameState.difficulty];
+    gameState.availableChoices = []; gameState.winningCells = []; gameState.losingCells = []; gameState.specialCells = []; gameState.attackingLine = [];
+    gameState.strikeCells = []; gameState.foulCells = [];
+    
+    const targetX = 8 + gameState.attackDepth;
+    
+    let selectedRows;
+    if (gameState.difficulty === 'hard') {
+        // Hard режим: 2 клітинки - або фланги (1, 8) або центр (3, 6)
+        if (gameState.hardModeFlankOrCenter === 'flank') {
+            selectedRows = [1, 8];
+        } else {
+            selectedRows = [3, 6];
+        }
+        // Чергуємо для наступного кроку (рандомно)
+        gameState.hardModeFlankOrCenter = Math.random() < 0.5 ? 'flank' : 'center';
+    } else {
+        // Easy режим: всі 4 клітинки
+        selectedRows = [1, 3, 6, 8].sort(() => Math.random() - 0.5).slice(0, settings.totalCells);
+    }
+    
+    selectedRows.forEach(y => {
+        const targetCoords = { x: targetX, y };
+        let position = null;
+        for (const att of ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM']) {
+            const pos = gameState.playerPositions[att];
+            if (pos && pos.x === targetX && pos.y === y) { position = att; break; }
+        }
+        if (!position) { if (y === 1) position = 'LM'; else if (y === 3) position = 'CF2'; else if (y === 6) position = 'CF'; else if (y === 8) position = 'RM'; }
+        gameState.attackingLine.push({ position, targetCoords });
+        gameState.availableChoices.push(targetCoords);
+    });
+    const shuffled = [...gameState.attackingLine].sort(() => Math.random() - 0.5);
+    shuffled.forEach((att, i) => { if (i < settings.winningCells) gameState.winningCells.push(att.targetCoords); else gameState.losingCells.push(att.targetCoords); });
+    
+    // Спецклітинка - максимум одна на крок, 50% шанс
+    if (Math.random() < 0.5) {
+        // Випадково вибираємо тип: Strike Position (winning) або Foul Position (losing)
+        if (Math.random() < 0.5 && gameState.winningCells.length > 0) {
+            // Strike Position - одна випадкова winning cell
+            const randomIndex = Math.floor(Math.random() * gameState.winningCells.length);
+            gameState.strikeCells.push(gameState.winningCells[randomIndex]);
+        } else if (gameState.losingCells.length > 0) {
+            // Foul Position - одна випадкова losing cell
+            const randomIndex = Math.floor(Math.random() * gameState.losingCells.length);
+            gameState.foulCells.push(gameState.losingCells[randomIndex]);
+        }
+    }
+    
+    highlightAvailableCells();
+}
+
+// Генерація кількості спецклітинок за формулою з документа
+function generateSpecialCellsCount(type) {
+    const diffSettings = {
+        'easy':   { C: 4, D_coef: 0.08, min: 0, max: 2 },
+        'medium': { C: 3, D_coef: 0.12, min: 0, max: 1 },
+        'hard':   { C: 2, D_coef: 0.24, min: 0, max: 1 },
+        'expert': { C: 3, D_coef: 0.28, min: 1, max: 2 },
+        'crazy':  { C: 4, D_coef: 0.32, min: 1, max: 3 }
+    };
+    
+    const bet = gameState.betAmount;
+    let B_coef = 1.0;
+    if (bet >= 100) B_coef = 1.6;
+    else if (bet >= 50) B_coef = 1.4;
+    else if (bet >= 10) B_coef = 1.2;
+    
+    const d = diffSettings[gameState.difficulty];
+    const rawValue = d.C * d.D_coef * B_coef;
+    const randJitter = (Math.random() - 0.5); // -0.5 to +0.5
+    const result = Math.round(rawValue + randJitter);
+    
+    return Math.max(d.min, Math.min(d.max, result));
+}
+
+function handleCellClick(pos) {
+    if (!gameState.isPlaying || !gameState.availableChoices.some(c => c.x === pos.x && c.y === pos.y)) return;
+    
+    // Визначаємо хто б'є залежно від фази
+    const kicker = getKickerForPhase();
+    if (kicker) { 
+        kicker.mode = 'kick'; 
+        kicker.kickTimer = 30; 
+    }
+    
+    const isWinning = gameState.winningCells.some(c => c.x === pos.x && c.y === pos.y);
+    const isSpecial = gameState.specialCells.some(c => c.x === pos.x && c.y === pos.y);
+    const isNegative = gameState.negativeCells.some(c => c.x === pos.x && c.y === pos.y);
+    const isStrike = gameState.strikeCells.some(c => c.x === pos.x && c.y === pos.y);
+    const isFoul = gameState.foulCells.some(c => c.x === pos.x && c.y === pos.y);
+    const isOpponentStrike = gameState.opponentStrikeCells && gameState.opponentStrikeCells.some(c => c.x === pos.x && c.y === pos.y);
+    
+    // Рух м'яча одразу з анімацією удару (без затримки)
+    showArrow(gameState.ballPosition, pos);
+    updateBallPosition(pos);
+    
+    // Обробка результату через невелику затримку для візуального ефекту
+    setTimeout(() => {
+        if (gameState.phase === 'attack') processAttackChoice(pos, isWinning, isSpecial, isStrike, isFoul);
+        else if (gameState.phase === 'defense') processDefenseChoice(pos, isWinning, isSpecial, isNegative, isOpponentStrike);
+        else if (gameState.phase === 'strike') processStrikeChoice(pos, isWinning, isSpecial);
+        else if (gameState.phase === 'opponent_strike') processOpponentStrikeChoice(pos, isWinning, isSpecial);
+        else if (gameState.phase === 'corner_pass') processCornerPassChoice(pos, isWinning);
+        else if (gameState.phase === 'opponent_corner_pass') processOpponentCornerPassChoice(pos, isWinning);
+    }, 400);
+}
+
+// Знаходимо гравця який б'є залежно від фази гри
+function getKickerForPhase() {
+    let kickerPosition = null;
+    let kickerTeam = null;
+    
+    if (gameState.phase === 'attack' || gameState.phase === 'strike' || gameState.phase === 'corner_pass') {
+        kickerPosition = gameState.ballHolder;
+        kickerTeam = 'team1';
+    } else if (gameState.phase === 'defense' || gameState.phase === 'opponent_strike' || gameState.phase === 'opponent_corner_pass') {
+        kickerPosition = gameState.opponentBallHolder;
+        kickerTeam = 'team2';
+    }
+    
+    if (!kickerPosition || !kickerTeam) return null;
+    
+    let found = null;
+    playerRegistry.forEach(p => {
+        if (p.el.dataset.position === kickerPosition && p.el.dataset.team === kickerTeam) {
+            found = p;
+        }
+    });
+    return found;
+}
+
+function findClosestPlayer(coords) {
+    let found = null;
+    playerRegistry.forEach(p => {
+        if (p.el.dataset.position === gameState.ballHolder && p.el.dataset.team === 'team1') found = p;
+        else if (p.el.dataset.position === gameState.opponentBallHolder && p.el.dataset.team === 'team2') found = p;
+    });
+    return found;
+}
+
+function showArrow(from, to) {
+    const arr = document.createElement('div');
+    arr.className = 'arrow-3d';
+    const x1 = from.x * CELL_W + CELL_W/2, y1 = from.y * CELL_H + CELL_H/2;
+    const x2 = to.x * CELL_W + CELL_W/2, y2 = to.y * CELL_H + CELL_H/2;
+    arr.style.width = Math.hypot(x2-x1, y2-y1) + 'px';
+    arr.style.left = x1 + 'px'; arr.style.top = y1 + 'px';
+    arr.style.transform = `translateZ(5px) rotate(${Math.atan2(y2-y1, x2-x1) * 180 / Math.PI}deg)`;
+    document.getElementById('field-board').appendChild(arr);
+    setTimeout(() => arr.remove(), 600);
+}
+
+function processAttackChoice(pos, isWinning, isSpecial, isStrike, isFoul) {
+    // Звук удару по м'ячу
+    if (sfx) sfx.playKick();
+    
+    if (isWinning) {
+        // Звук підбадьорення при влучному пасі
+        if (sfx) setTimeout(() => sfx.playPassSuccess(), 200);
+        
+        gameState.multiplierLevel++;
+        updateMultiplierDisplay();
+        
+        // Перевіряємо Strike Position - одразу удар по воротах БЕЗ руху гравців
+        if (isStrike) {
+            // Оновлюємо позицію м'яча та ball holder
+            updateBallPosition(pos);
+            const receiver = gameState.attackingLine.find(att => att.targetCoords.x === pos.x && att.targetCoords.y === pos.y);
+            if (receiver) gameState.ballHolder = receiver.position;
+            
+            // Встановлюємо флаг для продовження атаки після голу
+            gameState.strikePositionGoal = true;
+            gameState.attackDepth++; // +1 за Strike Position
+            
+            updatePhaseDisplay('ATTACK', 'STRIKE POSITION!');
+            setTimeout(() => startStrikePhase(), 800);
+            return;
+        }
+        
+        const maxMult = DIFFICULTY_SETTINGS[gameState.difficulty].multipliers.length;
+        if (gameState.multiplierLevel >= maxMult - 1) {
+            // Найвищий мультиплікатор - удар з поточної позиції (як Strike Position)
+            // Гравець залишається на лінії де отримав пас і б'є звідти
+            updateBallPosition(pos);
+            const receiver = gameState.attackingLine.find(att => att.targetCoords.x === pos.x && att.targetCoords.y === pos.y);
+            if (receiver) gameState.ballHolder = receiver.position;
+            
+            // Встановлюємо флаг для продовження атаки після голу
+            gameState.strikePositionGoal = true;
+            gameState.attackDepth++;
+            
+            setTimeout(() => startStrikePhase(), 800);
+        } else {
+            movePlayersForward(pos);
+            setTimeout(() => startAttackPhase(), 800);
+        }
+    } else {
+        // Хибний вибір - перевіряємо чи це Foul Position
+        if (isFoul) {
+            // Foul Position - атака продовжується штрафним ударом
+            const receiver = gameState.attackingLine.find(att => att.targetCoords.x === pos.x && att.targetCoords.y === pos.y);
+            const ballHolder = receiver ? receiver.position : gameState.ballHolder;
+            
+            // Зберігаємо позицію фолу
+            gameState.foulPosition = { x: pos.x, y: pos.y };
+            gameState.foulBallHolder = ballHolder;
+            gameState.ballHolder = ballHolder;
+            
+            updateBallPosition(pos);
+            
+            gameState.multiplierLevel = 0; 
+            updateMultiplierDisplay(); 
+            updatePhaseDisplay('FOUL!', 'FREE KICK!'); 
+            
+            // Встановлюємо флаг для продовження атаки після голу
+            gameState.strikePositionGoal = true;
+            
+            // Формуємо формацію штрафного (якщо не в штрафній зоні і не на флангах)
+            setupFreeKickFormation(pos, ballHolder);
+            
+            if (DEBUG_SKIP_FOUL_BET) {
+                // Debug режим - одразу штрафний удар
+                setTimeout(() => startStrikePhase(), 1000);
+            } else {
+                // Правильна логіка - зупиняємо гру для зміни ставки
+                setTimeout(() => {
+                    pauseForFoul();
+                }, 1000);
+            }
+        } else {
+            // Звичайне перехоплення - захисник перехоплює пас
+            interceptPass(pos);
+            updatePhaseDisplay('ATTACK', 'INTERCEPTED!'); 
+            setTimeout(() => switchToDefense(), 800);
+        }
+    }
+}
+
+// Формація для штрафного удару
+function setupFreeKickFormation(foulPos, ballHolder) {
+    const x = foulPos.x;
+    const y = foulPos.y;
+    
+    // Перевіряємо чи це пенальті (N4, N7, O4, O7, P4, P7)
+    // x: 13=N, 14=O, 15=P
+    // y: 3=Row4, 6=Row7
+    const isPenalty = (x >= 13 && x <= 15) && (y === 3 || y === 6);
+    
+    // Перевіряємо чи це фланговий штрафний (N2, O2, P2... або нижні)
+    // Додаємо x=14 (O) до перевірки
+    const isFlankUpper = (x >= 13 && x <= 15) && y === 1; // N2, O2, P2
+    const isFlankLower = (x >= 13 && x <= 15) && y === 8; // N9, O9, P9
+    
+    if (isPenalty) {
+        setupPenaltyFormation(foulPos, ballHolder);
+        return;
+    }
+    
+    if (isFlankUpper) {
+        setupFlankFreeKickFormation(foulPos, ballHolder, 'upper');
+        return;
+    }
+    
+    if (isFlankLower) {
+        setupFlankFreeKickFormation(foulPos, ballHolder, 'lower');
+        return;
+    }
+    
+    // Стандартний штрафний (стовпці I-M, x: 8-12)
+    if (x < 8 || x > 12) return;
+    
+    setupStandardFreeKickFormation(foulPos, ballHolder);
+}
+
+// Стандартна формація штрафного (стовпці I-M)
+function setupStandardFreeKickFormation(foulPos, ballHolder) {
+    const x = foulPos.x;
+    const y = foulPos.y;
+    
+    // Визначаємо кількість гравців у стінці
+    let wallSize = 0;
+    if (x === 8) wallSize = 0;      // I - без стінки
+    else if (x === 9) wallSize = 2;  // J - 2 гравці
+    else if (x === 10) wallSize = 3; // K - 3 гравці
+    else wallSize = 4;               // L, M - 4 гравці
+    
+    // Стінка на наступному стовпці від м'яча
+    const wallX = x + 1;
+    
+    // Центруємо стінку відносно позиції м'яча
+    const wallPlayers = ['RM', 'LM', 'ALM', 'ARM'].slice(0, wallSize);
+    
+    if (wallSize > 0) {
+        // Розраховуємо позиції стінки центровано відносно y м'яча
+        const startY = Math.max(1, Math.min(9 - wallSize, y - Math.floor(wallSize / 2)));
+        
+        wallPlayers.forEach((player, i) => {
+            movePlayerTo('team2', player, { x: wallX, y: startY + i });
+        });
+        
+        // Решта гравців півзахисту суперника (якщо не в стінці)
+        const notInWall = ['RM', 'LM', 'ALM', 'ARM'].filter(p => !wallPlayers.includes(p));
+        notInWall.forEach((player, i) => {
+            // Ставимо їх позаду
+            movePlayerTo('team2', player, { x: x - 1, y: i === 0 ? 2 : 7 });
+        });
+    }
+    
+    // ЛОГІКА РОЗТАШУВАННЯ В ШТРАФНОМУ МАЙДАНЧИКУ
+    // Перевіряємо чи це M4 (x=12, y=3) або M7 (x=12, y=6)
+    const isSpecialCase = (x === 12 && (y === 3 || y === 6));
+
+    // Якщо M4/M7 - мої гравці на 14 (разом з суперником)
+    // В інших випадках - мої гравці на 13 (перед суперником)
+    const myPlayersX = isSpecialCase ? 14 : 13;
+    
+    // Гравці суперника завжди на 14
+    const opponentDefendersX = 14;
+
+    const myPlayers = ['LM', 'CF', 'ALM', 'RM'].filter(p => p !== ballHolder);
+    
+    const myPositions = {
+        'LM': { x: myPlayersX, y: 2 },
+        'CF': { x: myPlayersX, y: 4 },
+        'ALM': { x: myPlayersX, y: 5 },
+        'RM': { x: myPlayersX, y: 7 }
+    };
+    
+    myPlayers.forEach(player => {
+        if (myPositions[player]) {
+            movePlayerTo('team1', player, myPositions[player]);
+        }
+    });
+    
+    // Захисники суперника ЗАВЖДИ в стовпці O (x=14)
+    const defenderPositions = {
+        'LD': { x: opponentDefendersX, y: 1 },
+        'LCD': { x: opponentDefendersX, y: 3 },
+        'RCD': { x: opponentDefendersX, y: 6 },
+        'RD': { x: opponentDefendersX, y: 8 }
+    };
+    
+    Object.entries(defenderPositions).forEach(([pos, coords]) => {
+        movePlayerTo('team2', pos, coords);
+    });
+    
+    // CF2 та ARM (якщо не ball holder) - вільні гравці позаду
+    const freeAttackers = ['CF2', 'ARM'].filter(p => p !== ballHolder);
+    freeAttackers.forEach((player, i) => {
+        movePlayerTo('team1', player, { x: x - 1, y: i === 0 ? 3 : 6 });
+    });
+    
+    // Мої захисники позаду
+    movePlayerTo('team1', 'LD', { x: 3, y: 1 });
+    movePlayerTo('team1', 'LCD', { x: 2, y: 3 });
+    movePlayerTo('team1', 'RCD', { x: 2, y: 6 });
+    movePlayerTo('team1', 'RD', { x: 3, y: 8 });
+}
+
+// Формація флангового штрафного (N2, O2, P2...)
+function setupFlankFreeKickFormation(foulPos, ballHolder, flank) {
+    // Координати стовпчиків
+    const N = 13;
+    const O = 14;
+    const P = 15;
+    
+    // Визначаємо виконавця штрафного залежно від флангу
+    const kicker = flank === 'upper' ? 'LM' : 'RM';
+    
+    // Оновлюємо глобального ballHolder, щоб гра знала, хто б'є
+    gameState.ballHolder = kicker;
+    
+    // Переміщуємо виконавця до м'яча
+    movePlayerTo('team1', kicker, foulPos);
+
+    if (flank === 'upper') {
+        // --- UPPER FLANK (y=1) ---
+        
+        // 🔴 ЧЕРВОНІ (Team 2) - Базова розстановка (для N2)
+        const oppPositions = {
+            'LM':  { x: N, y: 2 }, // N3
+            'LD':  { x: O, y: 2 }, // O3
+            'ALM': { x: N, y: 3 }, // N4
+            'LCD': { x: O, y: 4 }, // O5
+            'ARM': { x: N, y: 5 }, // N6
+            'RCD': { x: O, y: 6 }, // O7
+            'RM':  { x: N, y: 7 }, // N8
+            'RD':  { x: O, y: 8 }  // O9
+        };
+
+        // Якщо фол на O2 -> Зміщуємо стінку (LM, LD)
+        if (foulPos.x === O) {
+            oppPositions['LM'] = { x: O, y: 2 }; // O3
+            oppPositions['LD'] = { x: P, y: 2 }; // P3
+        }
+        
+        // 🔵 СИНІ (Team 1)
+        const myPositions = {
+            'ALM': { x: O, y: 3 }, // O4
+            'CF':  { x: N, y: 4 }, // N5
+            'ARM': { x: O, y: 5 }, // O6
+            'CF2': { x: N, y: 6 }, // N7
+            'RM':  { x: O, y: 7 }  // O8
+        };
+
+        // Застосовуємо позиції червоних
+        Object.entries(oppPositions).forEach(([pos, coords]) => movePlayerTo('team2', pos, coords));
+        
+        // Застосовуємо позиції синіх (БЕЗЗУМОВНО)
+        Object.entries(myPositions).forEach(([pos, coords]) => {
+            movePlayerTo('team1', pos, coords);
+        });
+        
+        // Прибираємо зайвих гравців
+        movePlayerTo('team2', 'CF', { x: 10, y: 3 });
+        movePlayerTo('team2', 'CF2', { x: 10, y: 6 });
+
+    } else {
+        // --- LOWER FLANK (y=8) ---
+        
+        // 🔴 ЧЕРВОНІ (Team 2) - Базова розстановка (для N9)
+        const oppPositions = {
+            'LD':  { x: O, y: 1 }, // O2
+            'LM':  { x: N, y: 2 }, // N3
+            'LCD': { x: O, y: 3 }, // O4
+            'ARM': { x: N, y: 4 }, // N5
+            'RCD': { x: O, y: 5 }, // O6
+            'ALM': { x: N, y: 6 }, // N7
+            'RM':  { x: N, y: 7 }, // N8
+            'RD':  { x: O, y: 7 }  // O8
+        };
+
+        // Якщо фол на O9 -> Зміщуємо стінку (RM, RD)
+        if (foulPos.x === O) {
+            oppPositions['RM'] = { x: O, y: 7 }; // O8
+            oppPositions['RD'] = { x: P, y: 7 }; // P8
+        }
+        
+        // 🔵 СИНІ (Team 1)
+        const myPositions = {
+            'LM':  { x: O, y: 2 }, // O3
+            'CF':  { x: N, y: 3 }, // N4
+            'ALM': { x: O, y: 4 }, // O5
+            'CF2': { x: N, y: 5 }, // N6
+            'ARM': { x: O, y: 6 }  // O7
+        };
+
+        // Застосовуємо позиції
+        Object.entries(oppPositions).forEach(([pos, coords]) => movePlayerTo('team2', pos, coords));
+        Object.entries(myPositions).forEach(([pos, coords]) => {
+            movePlayerTo('team1', pos, coords);
+        });
+        
+        // Прибираємо зайвих
+        movePlayerTo('team2', 'CF', { x: 10, y: 3 });
+        movePlayerTo('team2', 'CF2', { x: 10, y: 6 });
+    }
+    
+    // Мої захисники залишаються позаду
+    movePlayerTo('team1', 'LD', { x: 3, y: 1 });
+    movePlayerTo('team1', 'LCD', { x: 2, y: 3 });
+    movePlayerTo('team1', 'RCD', { x: 2, y: 6 });
+    movePlayerTo('team1', 'RD', { x: 3, y: 8 });
+}
+
+// Формація пенальті (N4, N7, Q4, Q7)
+function setupPenaltyFormation(foulPos, ballHolder) {
+    // Ball holder (CF) між клітинками N5 N6 (x=13, y=4.5)
+    // Але оскільки позиція дискретна, ставимо на N5 (x=13, y=4)
+    gameState.ballHolder = 'CF';
+    movePlayerTo('team1', 'CF', { x: 13, y: 4 });
+    updateBallPosition({ x: 13, y: 4 });
+    
+    // Як на скріншоті 4:
+    // Гравці атаки юзера в стовпці L (x=11)
+    // Захисники та півзахист суперника в стовпцях L та M (x=11, x=12)
+    
+    // Мої гравці в стовпці L (x=11)
+    movePlayerTo('team1', 'LM', { x: 11, y: 2 });
+    movePlayerTo('team1', 'ALM', { x: 11, y: 4 });
+    movePlayerTo('team1', 'CF2', { x: 11, y: 5 });
+    movePlayerTo('team1', 'ARM', { x: 11, y: 6 });
+    movePlayerTo('team1', 'RM', { x: 11, y: 7 });
+    
+    // Захисники суперника в стовпці M (x=12) - чергуються
+    movePlayerTo('team2', 'LD', { x: 12, y: 1 });
+    movePlayerTo('team2', 'LCD', { x: 12, y: 3 });
+    movePlayerTo('team2', 'RCD', { x: 12, y: 6 });
+    movePlayerTo('team2', 'RD', { x: 12, y: 8 });
+    
+    // Півзахист суперника теж в стовпцях L та M
+    movePlayerTo('team2', 'LM', { x: 11, y: 3 });
+    movePlayerTo('team2', 'ALM', { x: 12, y: 4 });
+    movePlayerTo('team2', 'ARM', { x: 12, y: 5 });
+    movePlayerTo('team2', 'RM', { x: 11, y: 8 });
+    
+    // Мої захисники позаду
+    movePlayerTo('team1', 'LD', { x: 3, y: 1 });
+    movePlayerTo('team1', 'LCD', { x: 2, y: 3 });
+    movePlayerTo('team1', 'RCD', { x: 2, y: 6 });
+    movePlayerTo('team1', 'RD', { x: 3, y: 8 });
+}
+
+// Пауза для зміни ставки після фолу
+function pauseForFoul() {
+    // Свисток судді
+    if (sfx) sfx.playWhistle();
+    
+    gameState.isPlaying = false;
+    gameState.phase = 'idle';
+    gameState.nextKickoff = 'free_kick';
+    
+    // Очищаємо клітинки
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    gameState.strikeCells = [];
+    gameState.foulCells = [];
+    
+    // Розблоковуємо контроли
+    setControlsLocked(false);
+    updateMainButton();
+    
+    updatePhaseDisplay('FREE KICK', 'PRESS PLAY TO SHOOT');
+    highlightAvailableCells(); // Очищає підсвітку
+}
+
+// Показуємо клітинки удару в неактивному (сірому) стані
+function showInactiveGoalCells() {
+    // Очищаємо всі клітинки
+    document.querySelectorAll('.cell').forEach(c => {
+        c.classList.remove('selectable', 'winning', 'losing', 'special', 'negative', 'inactive');
+        const oldStrikeMarker = c.querySelector('.strike-marker');
+        if (oldStrikeMarker) oldStrikeMarker.remove();
+        const oldFoulMarker = c.querySelector('.foul-marker');
+        if (oldFoulMarker) oldFoulMarker.remove();
+    });
+    
+    // Позиції воріт
+    const goalPositions = [{ x: 15, y: 3 }, { x: 15, y: 4 }, { x: 15, y: 5 }, { x: 15, y: 6 }];
+    
+    // Показуємо клітинки в неактивному стані
+    goalPositions.forEach(pos => {
+        const cell = document.querySelector(`.cell[data-x="${pos.x}"][data-y="${pos.y}"]`);
+        if (cell) {
+            cell.classList.add('selectable', 'inactive');
+        }
+    });
+}
+
+// Знаходимо найближчого захисника справа від клітинки і рухаємо його на перехоплення
+function interceptPass(targetPos) {
+    const interceptX = targetPos.x + 1; // Клітинка справа
+    let closestDefender = null;
+    let minDist = Infinity;
+    
+    // Шукаємо гравця team2 найближчого до позиції справа від цілі
+    for (const [pos, coords] of Object.entries(gameState.opponentPositions)) {
+        if (pos === 'GK') continue;
+        const dist = Math.abs(coords.x - interceptX) + Math.abs(coords.y - targetPos.y);
+        if (dist < minDist) {
+            minDist = dist;
+            closestDefender = pos;
+        }
+    }
+    
+    if (closestDefender) {
+        // Рухаємо захисника на клітинку пасу (перехоплення)
+        movePlayerTo('team2', closestDefender, { x: targetPos.x, y: targetPos.y });
+        // М'яч летить до цілі, але захисник його перехоплює
+        updateBallPosition(targetPos);
+    }
+}
+
+function movePlayersForward(targetPos) {
+    updateBallPosition(targetPos);
+    const receiver = gameState.attackingLine.find(att => att.targetCoords.x === targetPos.x && att.targetCoords.y === targetPos.y);
+    if (!receiver) return;
+    const newBallHolder = receiver.position;
+    gameState.attackDepth++;
+    const prevFormation = gameState.currentFormation || attackFormations['0_start'];
+    const newFormation = generateNextFormation(gameState.attackDepth, newBallHolder, prevFormation);
+    gameState.currentFormation = newFormation;
+    gameState.ballHolder = newBallHolder;
+    setTimeout(() => {
+        Object.entries(newFormation.positions).forEach(([p, coords]) => movePlayerTo('team1', p, coords));
+        moveOpponentsToStep(gameState.attackDepth);
+        movePlayerDefendersToStep(gameState.attackDepth);
+    }, 300);
+}
+
+function generateNextFormation(step, newBallHolder, prevFormation) {
+    const prevBallHolder = prevFormation.ballHolder, prevPositions = prevFormation.positions;
+    const upperFlank = ['LM', 'ALM', 'CF2'];
+    const prevFlank = upperFlank.includes(prevBallHolder) ? 'upper' : 'lower';
+    const newFlank = upperFlank.includes(newBallHolder) ? 'upper' : 'lower';
+    const sameFlank = prevFlank === newFlank;
+    const newPassX = 8 + step, newBHPos = prevPositions[newBallHolder], emptyRow = newBHPos.y;
+    const newPositions = {};
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => {
+        const playerFlank = upperFlank.includes(player) ? 'upper' : 'lower';
+        const prevPos = prevPositions[player];
+        if (player === newBallHolder) newPositions[player] = { ...prevPos };
+        else if (player === prevBallHolder) {
+            if (sameFlank) newPositions[player] = { x: newPassX, y: emptyRow };
+            else newPositions[player] = { x: newPassX + 1, y: playerFlank === 'upper' ? 2 : 7 };
+        } else if (prevPos.y === 2 || prevPos.y === 7) {
+            if (!sameFlank && playerFlank === newFlank) newPositions[player] = { x: newPassX, y: emptyRow };
+            else newPositions[player] = { x: newPassX + 1, y: playerFlank === 'upper' ? 2 : 7 };
+        } else newPositions[player] = { x: newPassX, y: prevPos.y };
+    });
+    return { ballHolder: newBallHolder, prevBallHolder, positions: newPositions };
+}
+
+function moveOpponentsToStep(stepIndex) {
+    if (stepIndex < 0 || stepIndex >= opponentFormations.length) return;
+    Object.entries(opponentFormations[stepIndex]).forEach(([pos, coords]) => movePlayerTo('team2', pos, coords));
+}
+
+function movePlayerDefendersToStep(stepIndex) {
+    if (stepIndex < 0 || stepIndex >= playerDefenseFormations.length) return;
+    Object.entries(playerDefenseFormations[stepIndex]).forEach(([pos, coords]) => {
+        // Не рухаємо ball holder якщо він захисник
+        if (pos === gameState.ballHolder) return;
+        movePlayerTo('team1', pos, coords);
+    });
+}
+
+// ==========================================
+// STRIKE PHASE
+// ==========================================
+function movePlayersToStrikePosition(targetPos) {
+    const receiver = gameState.attackingLine.find(att => att.targetCoords.x === targetPos.x && att.targetCoords.y === targetPos.y);
+    if (!receiver) return;
+    gameState.ballHolder = receiver.position;
+    const bhPos = { x: 14, y: targetPos.y };
+    updateBallPosition(bhPos);
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => {
+        const currentPos = gameState.playerPositions[player];
+        if (!currentPos) return;
+        if (player === receiver.position) movePlayerTo('team1', player, bhPos);
+        else movePlayerTo('team1', player, { x: 13, y: currentPos.y });
+    });
+    const defenders = ['LD', 'LCD', 'RCD', 'RD'];
+    let defInFront = null, minDist = Infinity;
+    defenders.forEach(def => { const defPos = gameState.opponentPositions[def]; if (defPos && Math.abs(defPos.y - targetPos.y) < minDist) { minDist = Math.abs(defPos.y - targetPos.y); defInFront = def; } });
+    defenders.forEach(def => { const defPos = gameState.opponentPositions[def]; if (!defPos) return; if (def === defInFront) movePlayerTo('team2', def, { x: 13, y: targetPos.y }); else movePlayerTo('team2', def, { x: 14, y: defPos.y }); });
+}
+
+function startStrikePhase() { gameState.phase = 'strike'; updatePhaseDisplay('STRIKE', 'SELECT AN AREA TO SHOOT'); generateGoalChoices(); }
+
+function generateGoalChoices() {
+    const settings = DIFFICULTY_SETTINGS[gameState.difficulty];
+    gameState.availableChoices = []; gameState.winningCells = []; gameState.losingCells = []; gameState.specialCells = [];
+    
+    let goalPositions;
+    if (gameState.difficulty === 'hard') {
+        // Hard режим: тільки кути воріт (фланги)
+        goalPositions = [{ x: 15, y: 3 }, { x: 15, y: 6 }];
+    } else {
+        // Easy режим: всі 4 клітинки воріт
+        goalPositions = [{ x: 15, y: 3 }, { x: 15, y: 4 }, { x: 15, y: 5 }, { x: 15, y: 6 }];
+    }
+    
+    gameState.availableChoices = [...goalPositions];
+    const shuffled = [...goalPositions].sort(() => Math.random() - 0.5);
+    shuffled.forEach((pos, i) => { if (i < settings.winningCells) gameState.winningCells.push(pos); else gameState.losingCells.push(pos); });
+    
+    // Corner - одна на крок, 50% шанс
+    if (Math.random() < 0.5 && gameState.losingCells.length > 0) {
+        const randomIndex = Math.floor(Math.random() * gameState.losingCells.length);
+        gameState.specialCells.push(gameState.losingCells[randomIndex]);
+    }
+    
+    highlightAvailableCells();
+}
+
+function processStrikeChoice(pos, isWinning, isSpecial) {
+    // Звук удару по м'ячу
+    if (sfx) sfx.playKick();
+    
+    if (isWinning) { 
+        // Звук голу + свисток
+        if (sfx) {
+            setTimeout(() => sfx.playGoal(), 300);
+            setTimeout(() => sfx.playWhistle(), 500);
+        }
+        
+        gameState.playerScore++; 
+        gameState.multiplierLevel++; // +1 за успішний удар
+        updateScore();
+        updateMultiplierDisplay();
+        
+        const maxMult = DIFFICULTY_SETTINGS[gameState.difficulty].multipliers.length;
+        const isFinalMultiplier = gameState.multiplierLevel >= maxMult;
+        
+        if (gameState.strikePositionGoal) {
+            gameState.strikePositionGoal = false;
+            if (isFinalMultiplier) {
+                updatePhaseDisplay('GOAL!', 'TOWER COMPLETE!'); 
+                setTimeout(() => endRound(), 2000); 
+            } else {
+                updatePhaseDisplay('GOAL!', 'STRIKE POSITION GOAL!'); 
+                setTimeout(() => strikePositionTransition(), 1500); 
+            }
+        } else {
+            // Звичайний гол (фінальний мультиплікатор)
+            if (isFinalMultiplier) {
+                updatePhaseDisplay('GOAL!', 'TOWER COMPLETE!'); 
+                setTimeout(() => endRound(), 2000);
+            } else {
+                // Гол але не фінальний - продовжуємо гру
+                updatePhaseDisplay('GOAL!', 'YOU SCORED!'); 
+                setTimeout(() => continueAfterGoal(), 2000);
+            }
+        }
+    }
+    else { 
+        gameState.strikePositionGoal = false;
+        
+        // Звук розчарування при промаху
+        if (sfx) setTimeout(() => sfx.playMiss(), 200);
+        
+        if (isSpecial) { 
+            updatePhaseDisplay('CORNER', 'CROSSING...'); 
+            
+            // Скидаємо мультиплікатор на 0 (хибний вибір)
+            gameState.multiplierLevel = 0; 
+            updateMultiplierDisplay(); 
+            
+            // Визначаємо фланг (верхній/нижній)
+            const flank = pos.y <= 4 ? 'upper' : 'lower';
+            gameState.pendingCornerFlank = flank;
+
+            // Показуємо панель ставки перед corner
+            setTimeout(() => pauseForCorner(flank), 1000); 
+        } else { 
+            updatePhaseDisplay('MISSED', 'SAVED!'); 
+            setTimeout(() => switchToDefense(), 1000); 
+        } 
+    }
+}
+
+// Функція налаштування формації кутового удару
+function setupCornerKickFormation(flank) {
+    gameState.phase = 'corner_pass'; // Фаза подачі
+    
+    // Координати стовпчиків
+    const J=9, K=10, L=11, M=12, N=13, O=14, P=15;
+    
+    let kicker;
+    let cornerPos;
+    
+    if (flank === 'upper') {
+        // --- ЛІВИЙ КУТОВИЙ (Upper) ---
+        // М'яч на P1
+        kicker = 'ALM';
+        cornerPos = { x: P, y: 0 }; // P1
+        
+        // 🔵 СИНІ (Team 1)
+        const myPositions = {
+            'ALM': cornerPos,      // P1 (Kicker)
+            'LM':  { x: N, y: 3 }, // N4
+            'CF':  { x: O, y: 3 }, // O4 (Верхній)
+            'RM':  { x: N, y: 5 }, // N6
+            'CF2': { x: O, y: 5 }, // O6 (Нижній, активний)
+            'ARM': { x: L, y: 5 }  // L6
+        };
+        
+        // 🔴 ЧЕРВОНІ (Team 2)
+        const oppPositions = {
+            'LD':  { x: N, y: 4 }, // N5
+            'LCD': { x: O, y: 4 }, // O5
+            'RCD': { x: N, y: 6 }, // N7
+            'RD':  { x: O, y: 6 }, // O7
+            'LM':  { x: O, y: 1 }, // O2 (Змінено з M2)
+            'ALM': { x: L, y: 3 }, // L4
+            'CF':  { x: J, y: 3 }, // J4 (Верхній)
+            'CF2': { x: J, y: 6 }, // J7 (Нижній)
+            'ARM': { x: L, y: 6 }, // L7
+            'RM':  { x: N, y: 8 }  // N9
+        };
+        
+        Object.entries(myPositions).forEach(([p, coords]) => movePlayerTo('team1', p, coords));
+        Object.entries(oppPositions).forEach(([p, coords]) => movePlayerTo('team2', p, coords));
+        
+    } else {
+        // --- ПРАВИЙ КУТОВИЙ (Lower) ---
+        // М'яч на P10
+        kicker = 'ARM';
+        cornerPos = { x: P, y: 9 }; // P10
+        
+        // 🔵 СИНІ (Team 1)
+        const myPositions = {
+            'ARM': cornerPos,      // P10 (Kicker)
+            'LM':  { x: N, y: 4 }, // N5
+            'CF':  { x: O, y: 4 }, // O5
+            'RM':  { x: N, y: 6 }, // N7
+            'CF2': { x: O, y: 6 }, // O7
+            'ALM': { x: L, y: 4 }  // L5
+        };
+        
+        // 🔴 ЧЕРВОНІ (Team 2)
+        const oppPositions = {
+            'LCD': { x: N, y: 3 }, // N4
+            'LD':  { x: O, y: 3 }, // O4
+            'RD':  { x: N, y: 5 }, // N6
+            'RCD': { x: O, y: 5 }, // O6
+            'LM':  { x: N, y: 1 }, // N2
+            'ALM': { x: L, y: 3 }, // L4
+            'ARM': { x: L, y: 6 }, // L7
+            'RM':  { x: O, y: 8 }  // O9
+        };
+        
+        Object.entries(myPositions).forEach(([p, coords]) => movePlayerTo('team1', p, coords));
+        Object.entries(oppPositions).forEach(([p, coords]) => movePlayerTo('team2', p, coords));
+    }
+    
+    // Встановлюємо м'яч та повідомлення
+    gameState.ballHolder = kicker;
+    updateBallPosition(cornerPos);
+    updatePhaseDisplay('CORNER', 'SELECT PLAYER TO CROSS');
+    
+    // Генеруємо цілі для пасу
+    generateCornerPassTargets(flank);
+}
+
+function generateCornerPassTargets(flank) {
+    // Координати стовпчиків N=13, O=14
+    const N = 13, O = 14;
+    
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = []; 
+    
+    // Доступні гравці для пасу: CF, CF2, LM, RM
+    let targets = [];
+    
+    if (gameState.difficulty === 'hard') {
+        // Hard режим: тільки 2 опції
+        if (flank === 'upper') {
+            targets = [
+                { x: N, y: 3 }, // N4
+                { x: O, y: 5 }  // O6
+            ];
+        } else {
+            targets = [
+                { x: N, y: 4 }, // N5
+                { x: O, y: 6 }  // O7
+            ];
+        }
+    } else {
+        // Easy режим: всі 4 опції
+        if (flank === 'upper') {
+            // Позиції для Лівого кутового (Upper)
+            targets = [
+                { x: N, y: 3 }, // LM (N4)
+                { x: O, y: 3 }, // CF (O4)
+                { x: N, y: 5 }, // RM (N6)
+                { x: O, y: 5 }  // CF2 (O6)
+            ];
+        } else {
+            // Позиції для Правого кутового (Lower)
+            targets = [
+                { x: N, y: 4 }, // LM (N5)
+                { x: O, y: 4 }, // CF (O5)
+                { x: N, y: 6 }, // RM (N7)
+                { x: O, y: 6 }  // CF2 (O7)
+            ];
+        }
+    }
+    
+    gameState.availableChoices = [...targets];
+    
+    const settings = DIFFICULTY_SETTINGS[gameState.difficulty];
+    const shuffled = [...targets].sort(() => Math.random() - 0.5);
+    
+    shuffled.forEach((t, i) => {
+        if (i < settings.winningCells) {
+            gameState.winningCells.push(t);
+        } else {
+            gameState.losingCells.push(t);
+        }
+    });
+    
+    highlightAvailableCells();
+}
+
+function processCornerPassChoice(pos, isWinning) {
+    // 1. Анімація пасу
+    updateBallPosition(pos);
+    
+    if (isWinning) {
+        // УСПІШНИЙ ПАС
+        
+        // 2. Визначаємо, хто отримав м'яч
+        let receiver = null;
+        for(let [p, c] of Object.entries(gameState.playerPositions)) {
+            if(c.x === pos.x && c.y === pos.y) {
+                receiver = p;
+                break;
+            }
+        }
+        gameState.ballHolder = receiver || 'CF'; 
+        
+        // 3. Збільшуємо мультиплікатор (Крок 1: Успішна подача)
+        gameState.multiplierLevel++;
+        updateMultiplierDisplay();
+        
+        // 4. Перехід до фази удару (Крок 2: Удар)
+        updatePhaseDisplay('STRIKE', 'SHOOT!');
+        setTimeout(() => {
+            startStrikePhase(); 
+        }, 800);
+    } else {
+        // ХИБНИЙ ВИБІР (ПЕРЕХОПЛЕННЯ)
+        
+        // Знаходимо найближчого захисника для анімації перехоплення
+        let closestDefender = null;
+        let minDist = Infinity;
+        for (const [p, coords] of Object.entries(gameState.opponentPositions)) {
+            const dist = Math.hypot(coords.x - pos.x, coords.y - pos.y);
+            if (dist < minDist) {
+                minDist = dist;
+                closestDefender = p;
+            }
+        }
+        
+        if (closestDefender) {
+            movePlayerTo('team2', closestDefender, pos);
+        }
+        
+        updatePhaseDisplay('CORNER', 'CLEARED!');
+        setTimeout(() => switchToDefense(), 1000);
+    }
+}
+
+// Допоміжна функція для скидання позицій перед атакою (наприклад, після кутового)
+function resetPositionsForNewAttack() {
+    // Використовуємо базову формацію kickoff_left для скидання
+    const f = FORMATIONS['kickoff_left'];
+    
+    // Рухаємо Team 1
+    Object.entries(f.team1).forEach(([pos, coords]) => {
+        movePlayerTo('team1', pos, coords);
+    });
+    
+    // Рухаємо Team 2
+    Object.entries(f.team2).forEach(([pos, coords]) => {
+        movePlayerTo('team2', pos, coords);
+    });
+    
+    // Оновлюємо м'яч
+    updateBallPosition(f.ball);
+    
+    // Скидаємо параметри атаки
+    gameState.attackDepth = 0;
+    gameState.currentFormation = attackFormations['0_start'];
+    gameState.ballHolder = 'ALM'; // Стандартний ball holder для kickoff
+}
+
+// Транзішн після Strike Position голу
+function strikePositionTransition() {
+    gameState.strikePositionGoal = false;
+    gameState.isStrikePositionTransition = true; // Зберігаємо мультиплікатор при перехопленні
+    
+    updatePhaseDisplay('KICKOFF', 'OPPONENT RESTART...');
+    
+    // Суперник розігрує з центру - переходимо в реальну фазу захисту
+    // Мультиплікатор вже на наступному рівні (підняли за гол)
+    // Гравець має сам перехопити м'яч
+    
+    setTimeout(() => {
+        // Переходимо в захист БЕЗ скидання мультиплікатора
+        continueToDefense();
+    }, 1000);
+}
+
+// Завершення раунду після голу
+function endRound() {
+    // Кінець раунду - скидаємо все і показуємо bet UI
+    gameState.isPlaying = false;
+    gameState.phase = 'idle';
+    gameState.multiplierLevel = 0;
+    gameState.attackDepth = 0;
+    gameState.defenseDepth = 0;
+    gameState.currentFormation = null;
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Після голу - суперник розігрує (захист)
+    gameState.nextKickoff = 'opponent';
+    
+    // Формуємо захисну позицію
+    gameState.opponentFormation = opponentAttackFormations['0_start']; 
+    gameState.opponentBallHolder = 'ALM';
+    setupDefenseFormation();
+    
+    // Розблоковуємо контроли
+    setControlsLocked(false);
+    
+    updateMultiplierDisplay();
+    highlightAvailableCells();
+    showBetUI();
+}
+
+// Після голу (не фінального) - продовжуємо гру в захисті БЕЗ скидання мультиплікатора
+function continueAfterGoal() {
+    // Суперник розігрує з центру
+    setupFormation('kickoff_right');
+    
+    // Плавний перехід в захист
+    setTimeout(() => continueToDefense(), 500);
+}
+
+// ==========================================
+// DEFENSE PHASE
+// ==========================================
+// Хибний вибір в АТАЦІ - скидаємо мультиплікатор, суперник розігрує з центру
+function switchToDefense() {
+    // Звук невдоволення трибун
+    if (sfx) sfx.playBoo();
+    
+    // Скидаємо стан
+    gameState.phase = 'idle'; 
+    gameState.multiplierLevel = 0;
+    gameState.defenseDepth = 0; 
+    gameState.defenseFailCounter = 0; 
+    gameState.attackDepth = 0; 
+    gameState.currentFormation = null;
+    gameState.strikeCells = []; 
+    gameState.foulCells = [];
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Зупиняємо гру
+    gameState.isPlaying = false;
+    gameState.nextKickoff = 'opponent'; // Суперник розігрує з центру
+    
+    // Формуємо захисну позицію з центру
+    gameState.opponentFormation = opponentAttackFormations['0_start']; 
+    gameState.opponentBallHolder = 'ALM';
+    setupDefenseFormation();
+    
+    // Очищаємо підсвітку клітинок
+    highlightAvailableCells();
+    
+    // Розблоковуємо контроли і показуємо bet UI
+    setControlsLocked(false);
+    updateMultiplierDisplay();
+    showBetUI();
+}
+
+// Хибний вибір в ЗАХИСТІ - скидаємо мультиплікатор, суперник просувається вперед
+function pauseForDefenseFail() {
+    // Звук невдоволення трибун
+    if (sfx) sfx.playBoo();
+    
+    // Скидаємо мультиплікатор але зберігаємо defenseDepth!
+    gameState.phase = 'idle'; 
+    gameState.multiplierLevel = 0;
+    // НЕ скидаємо defenseDepth - суперник вже просунувся
+    gameState.attackDepth = 0; 
+    gameState.currentFormation = null;
+    gameState.strikeCells = []; 
+    gameState.foulCells = [];
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Зупиняємо гру
+    gameState.isPlaying = false;
+    gameState.nextKickoff = 'defense_continue'; // Продовжуємо захист з поточної позиції
+    
+    // Очищаємо підсвітку клітинок
+    highlightAvailableCells();
+    
+    // Розблоковуємо контроли і показуємо bet UI
+    setControlsLocked(false);
+    updateMultiplierDisplay();
+    showBetUI();
+}
+
+// Пауза перед ударом суперника - показуємо bet UI
+function pauseForOpponentStrike(isStrikePosition) {
+    // Звук невдоволення трибун
+    if (sfx) sfx.playBoo();
+    // Скидаємо мультиплікатор
+    gameState.phase = 'idle'; 
+    gameState.multiplierLevel = 0;
+    gameState.attackDepth = 0; 
+    gameState.currentFormation = null;
+    gameState.strikeCells = []; 
+    gameState.foulCells = [];
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Зберігаємо інфо про strike position
+    gameState.pendingOpponentStrike = isStrikePosition;
+    
+    // Зупиняємо гру
+    gameState.isPlaying = false;
+    gameState.nextKickoff = 'opponent_strike'; // Після PLAY - удар суперника
+    
+    // Очищаємо підсвітку клітинок
+    highlightAvailableCells();
+    
+    // Розблоковуємо контроли і показуємо bet UI
+    setControlsLocked(false);
+    updateMultiplierDisplay();
+    showBetUI();
+}
+
+// Пауза перед кутовим - показуємо bet UI
+function pauseForCorner(flank) {
+    // Звук невдоволення (промах по воротах)
+    if (sfx) sfx.playBoo();
+    gameState.phase = 'idle'; 
+    gameState.multiplierLevel = 0;
+    gameState.attackDepth = 0; 
+    gameState.currentFormation = null;
+    gameState.strikeCells = []; 
+    gameState.foulCells = [];
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Зберігаємо фланг для corner
+    gameState.pendingCornerFlank = flank;
+    
+    // Зупиняємо гру
+    gameState.isPlaying = false;
+    gameState.nextKickoff = 'corner'; // Після PLAY - кутовий
+    
+    // Очищаємо підсвітку клітинок
+    highlightAvailableCells();
+    
+    // Розблоковуємо контроли і показуємо bet UI
+    setControlsLocked(false);
+    updateMultiplierDisplay();
+    showBetUI();
+}
+
+// Після голу - продовжуємо гру в захисті БЕЗ паузи
+function continueToDefense() {
+    // НЕ скидаємо мультиплікатор!
+    gameState.defenseDepth = 0; 
+    gameState.defenseFailCounter = 0; 
+    gameState.attackDepth = 0; 
+    gameState.currentFormation = null;
+    gameState.strikeCells = []; 
+    gameState.foulCells = [];
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Формуємо захисну позицію
+    gameState.opponentFormation = opponentAttackFormations['0_start']; 
+    gameState.opponentBallHolder = 'ALM';
+    setupDefenseFormation();
+    
+    // Очищаємо підсвітку клітинок
+    highlightAvailableCells();
+    
+    // Переходимо в захист
+    gameState.phase = 'defense';
+    updatePhaseDisplay('DEFENSE', 'INTERCEPT THE PASS');
+    updateMultiplierDisplay();
+    
+    setTimeout(() => generateDefenseTargets(), 500);
+}
+
+// Функція яка починає захисну фазу (викликається після PLAY)
+function startDefensePhase() {
+    gameState.phase = 'defense';
+    updatePhaseDisplay('DEFENSE', 'INTERCEPT THE PASS');
+    setTimeout(() => generateDefenseTargets(), 500);
+}
+
+function setupDefenseFormation() {
+    // 1. Розставляємо моїх гравців (Team 1) в захисну формацію
+    const formation = defenseFormations[0];
+    Object.entries(formation).forEach(([pos, coords]) => movePlayerTo('team1', pos, coords));
+    
+    // 2. Розставляємо атакуючих гравців суперника (Team 2)
+    const oppFormation = opponentAttackFormations['0_start'].positions;
+    Object.entries(oppFormation).forEach(([pos, coords]) => movePlayerTo('team2', pos, coords));
+    
+    // 3. ВИПРАВЛЕННЯ: Примусово повертаємо захисників суперника на стандартні позиції
+    // (бо після пенальті/штрафного вони залишаються в стінці)
+    const oppDefenders = {
+        'LD': { x: 12, y: 1 },
+        'LCD': { x: 13, y: 3 },
+        'RCD': { x: 13, y: 6 },
+        'RD': { x: 12, y: 8 }
+    };
+    Object.entries(oppDefenders).forEach(([pos, coords]) => movePlayerTo('team2', pos, coords));
+
+    // 4. Оновлюємо позицію м'яча
+    const bhPos = gameState.opponentPositions[gameState.opponentBallHolder];
+    if (bhPos) updateBallPosition(bhPos);
+}
+
+function generateDefenseTargets() {
+    const settings = DIFFICULTY_SETTINGS[gameState.difficulty];
+    gameState.availableChoices = []; gameState.winningCells = []; gameState.losingCells = []; gameState.specialCells = []; gameState.negativeCells = []; gameState.opponentStrikeCells = []; gameState.opponentAttackingLine = [];
+    const targetX = 7 - gameState.defenseDepth;
+    
+    let selectedRows;
+    if (gameState.difficulty === 'hard') {
+        // Hard режим: 2 клітинки - або фланги (1, 8) або центр (3, 6)
+        if (gameState.hardModeFlankOrCenter === 'flank') {
+            selectedRows = [1, 8];
+        } else {
+            selectedRows = [3, 6];
+        }
+        // Чергуємо для наступного кроку (рандомно)
+        gameState.hardModeFlankOrCenter = Math.random() < 0.5 ? 'flank' : 'center';
+    } else {
+        // Easy режим: всі 4 клітинки
+        selectedRows = [1, 3, 6, 8].sort(() => Math.random() - 0.5).slice(0, settings.totalCells);
+    }
+    
+    selectedRows.forEach(y => {
+        const targetCoords = { x: targetX, y };
+        let position = null;
+        for (const att of ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM']) { const pos = gameState.opponentPositions[att]; if (pos && pos.x === targetX && pos.y === y) { position = att; break; } }
+        if (!position) { if (y === 1) position = 'LM'; else if (y === 3) position = 'CF2'; else if (y === 6) position = 'CF'; else if (y === 8) position = 'RM'; }
+        gameState.opponentAttackingLine.push({ position, targetCoords });
+        gameState.availableChoices.push(targetCoords);
+    });
+    const shuffled = [...gameState.opponentAttackingLine].sort(() => Math.random() - 0.5);
+    shuffled.forEach((att, i) => { if (i < settings.winningCells) gameState.winningCells.push(att.targetCoords); else gameState.losingCells.push(att.targetCoords); });
+    
+    // Спецклітинка в захисті - максимум одна на крок, 50% шанс
+    if (Math.random() < 0.5 && gameState.losingCells.length > 0) {
+        // Opponent Strike Position - одна випадкова losing cell
+        const randomIndex = Math.floor(Math.random() * gameState.losingCells.length);
+        gameState.opponentStrikeCells.push(gameState.losingCells[randomIndex]);
+    }
+    
+    highlightAvailableCells();
+}
+
+function processDefenseChoice(pos, isWinning, isSpecial, isNegative, isOpponentStrike) {
+    // Звук удару по м'ячу
+    if (sfx) sfx.playKick();
+    
+    if (isWinning) { 
+        // Звук успішного перехоплення
+        if (sfx) setTimeout(() => sfx.playPassSuccess(), 200);
+        
+        gameState.defenseFailCounter = 0; 
+        // Мій гравець перехоплює пас
+        const interceptor = interceptPassByTeam1(pos);
+        updatePhaseDisplay('DEFENSE', 'INTERCEPTED!'); 
+        
+        // Перевіряємо чи це Strike Position транзішн
+        if (gameState.isStrikePositionTransition) {
+            gameState.isStrikePositionTransition = false;
+            gameState.multiplierLevel++; // Досягаємо наступний рівень
+            updateMultiplierDisplay();
+            
+            const maxMult = DIFFICULTY_SETTINGS[gameState.difficulty].multipliers.length;
+            if (gameState.multiplierLevel >= maxMult - 1) {
+                // Останній рівень мультиплікатора - удар з позиції перехоплення (як Strike Position)
+                setTimeout(() => {
+                    gameState.ballHolder = interceptor;
+                    updatePhaseDisplay('STRIKE', 'FINAL SHOT!');
+                    setTimeout(() => startStrikePhase(), 500);
+                }, 500);
+            } else {
+                // Ще не останній мультиплікатор - продовжуємо атаку з attackDepth=1
+                setTimeout(() => startAttackAfterInterceptKeepMultiplier(pos, interceptor), 1000);
+            }
+        } else {
+            // Звичайне перехоплення - починаємо атаку з 2-го рівня мультиплікатора
+            setTimeout(() => startAttackAfterIntercept(pos, interceptor), 1000); 
+        }
+    }
+    else {
+        // При хибному виборі в Strike Position транзішні - скидаємо флаг
+        if (gameState.isStrikePositionTransition) {
+            gameState.isStrikePositionTransition = false;
+        }
+        
+        gameState.defenseFailCounter++;
+        
+        // Strike суперника - хибний вибір, показуємо bet UI, потім удар
+        if (isOpponentStrike) {
+            // Оновлюємо ball holder суперника
+            const receiver = gameState.opponentAttackingLine.find(att => att.targetCoords.x === pos.x && att.targetCoords.y === pos.y);
+            if (receiver) gameState.opponentBallHolder = receiver.position;
+            updateBallPosition(pos);
+            
+            // Скидаємо мультиплікатор і показуємо bet UI
+            setTimeout(() => pauseForOpponentStrike(true), 800); // true = Strike Position
+        }
+        else if (isNegative) {
+            // Негативна клітинка - удар суперника, показуємо bet UI
+            setTimeout(() => pauseForOpponentStrike(false), 800);
+        }
+        else if (isSpecial) { updatePhaseDisplay('DEFENSE', 'OFFSIDE!'); setTimeout(() => { setupFormation('kickoff_left'); startAttackPhase(); }, 1000); }
+        else { 
+            // Хибний вибір в захисті - суперник просувається вперед
+            gameState.defenseDepth++; 
+            gameState.defenseFailCounter++;
+            moveOpponentsForwardDefense(pos);
+            movePlayersBackDefense();
+            
+            if (gameState.defenseDepth >= 7) {
+                // Суперник дійшов до воріт - удар, показуємо bet UI
+                setTimeout(() => pauseForOpponentStrike(false), 800);
+            } else {
+                // Показуємо bet UI, суперник залишається на позиції
+                setTimeout(() => pauseForDefenseFail(), 800);
+            }
+        }
+    }
+}
+
+// Мій гравець (team1) перехоплює пас суперника - наскакує зліва
+function interceptPassByTeam1(targetPos) {
+    const interceptX = targetPos.x - 1; // Клітинка зліва
+    let closestDefender = null;
+    let minDist = Infinity;
+    
+    // Шукаємо гравця team1 найближчого до позиції зліва від цілі
+    for (const [pos, coords] of Object.entries(gameState.playerPositions)) {
+        if (pos === 'GK') continue;
+        const dist = Math.abs(coords.x - interceptX) + Math.abs(coords.y - targetPos.y);
+        if (dist < minDist) {
+            minDist = dist;
+            closestDefender = pos;
+        }
+    }
+    
+    if (closestDefender) {
+        // Рухаємо мого гравця на клітинку пасу (перехоплення)
+        movePlayerTo('team1', closestDefender, { x: targetPos.x, y: targetPos.y });
+        // М'яч летить до цілі, але мій гравець його перехоплює
+        updateBallPosition(targetPos);
+    }
+    
+    return closestDefender;
+}
+
+// Позиціонуємо для удару після перехоплення в Strike Position транзішні
+function movePlayersToStrikePositionFromIntercept(interceptPos, interceptor) {
+    gameState.ballHolder = interceptor;
+    const bhPos = { x: 14, y: interceptPos.y };
+    updateBallPosition(bhPos);
+    
+    // Рухаємо ball holder на ударну позицію
+    movePlayerTo('team1', interceptor, bhPos);
+    
+    // Інші атакуючі на позиції для удару
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => {
+        if (player === interceptor) return;
+        const currentPos = gameState.playerPositions[player];
+        if (currentPos) {
+            movePlayerTo('team1', player, { x: 13, y: currentPos.y });
+        }
+    });
+    
+    // Захисники суперника
+    const defenders = ['LD', 'LCD', 'RCD', 'RD'];
+    let defInFront = null, minDist = Infinity;
+    defenders.forEach(def => { 
+        const defPos = gameState.opponentPositions[def]; 
+        if (defPos && Math.abs(defPos.y - interceptPos.y) < minDist) { 
+            minDist = Math.abs(defPos.y - interceptPos.y); 
+            defInFront = def; 
+        } 
+    });
+    defenders.forEach(def => { 
+        const defPos = gameState.opponentPositions[def]; 
+        if (!defPos) return; 
+        if (def === defInFront) movePlayerTo('team2', def, { x: 13, y: interceptPos.y }); 
+        else movePlayerTo('team2', def, { x: 14, y: defPos.y }); 
+    });
+}
+
+// Починаємо атаку після перехоплення - зберігаємо поточний мультиплікатор
+function startAttackAfterInterceptKeepMultiplier(interceptPos, interceptor) {
+    gameState.phase = 'attack';
+    // НЕ змінюємо multiplierLevel - він вже правильний
+    gameState.attackDepth = 1; // Починаємо з кроку 1, як після звичайного розіграшу
+    
+    // Ball holder - гравець що перехопив
+    const newBallHolder = interceptor || 'ALM';
+    gameState.ballHolder = newBallHolder;
+    
+    // Позиція м'яча - де перехопили
+    updateBallPosition(interceptPos);
+    
+    const upperFlankAttackers = ['LM', 'ALM', 'CF2'];
+    const newFlank = interceptPos.y <= 4 ? 'upper' : 'lower';
+    
+    const newPassX = 8 + gameState.attackDepth; // = 9
+    
+    const positions = {};
+    
+    // Ball holder на місці перехоплення
+    positions[newBallHolder] = { x: interceptPos.x, y: interceptPos.y };
+    
+    // Розставляємо атакуючих з логікою free attacker
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => {
+        if (player === newBallHolder) return;
+        
+        if (player === 'LM') {
+            positions['LM'] = { x: newPassX, y: 1 };
+        } else if (player === 'RM') {
+            positions['RM'] = { x: newPassX, y: 8 };
+        } else if (player === 'ALM') {
+            positions['ALM'] = { x: newPassX, y: 3 };
+        } else if (player === 'CF') {
+            positions['CF'] = { x: newPassX, y: 6 };
+        } else if (player === 'CF2') {
+            if (newFlank === 'upper') {
+                if (newBallHolder === 'LM') {
+                    positions['CF2'] = { x: newPassX, y: 1 };
+                } else if (newBallHolder === 'ALM') {
+                    positions['CF2'] = { x: newPassX, y: 3 };
+                } else {
+                    positions['CF2'] = { x: newPassX + 1, y: 2 };
+                }
+            } else {
+                positions['CF2'] = { x: newPassX + 1, y: 2 };
+            }
+        } else if (player === 'ARM') {
+            if (newFlank === 'lower') {
+                if (newBallHolder === 'RM') {
+                    positions['ARM'] = { x: newPassX, y: 8 };
+                } else if (newBallHolder === 'CF') {
+                    positions['ARM'] = { x: newPassX, y: 6 };
+                } else {
+                    positions['ARM'] = { x: newPassX + 1, y: 7 };
+                }
+            } else {
+                positions['ARM'] = { x: newPassX + 1, y: 7 };
+            }
+        }
+    });
+    
+    Object.entries(positions).forEach(([player, coords]) => {
+        movePlayerTo('team1', player, coords);
+    });
+    
+    // Рухаємо захисників та суперників на крок 1
+    movePlayerDefendersToStep(1);
+    moveOpponentsToStep(1);
+    
+    gameState.currentFormation = {
+        ballHolder: newBallHolder,
+        positions: positions
+    };
+    
+    updateMultiplierDisplay();
+    setTimeout(() => startAttackPhase(), 500);
+}
+
+// Починаємо атаку після перехоплення - з 2-го рівня мультиплікатора
+function startAttackAfterIntercept(interceptPos, interceptor) {
+    gameState.phase = 'attack';
+    
+    // Якщо вже маємо мультиплікатор - збільшуємо на 1
+    // Якщо мультиплікатор 0 - встановлюємо 1 (як перший успішний пас)
+    if (gameState.multiplierLevel > 0) {
+        gameState.multiplierLevel++; // Перехоплення = +1 рівень
+    } else {
+        gameState.multiplierLevel = 1;
+    }
+    
+    // attackDepth відповідає multiplierLevel
+    gameState.attackDepth = gameState.multiplierLevel;
+    
+    // Ball holder - гравець що перехопив
+    const newBallHolder = interceptor || 'ALM';
+    gameState.ballHolder = newBallHolder;
+    
+    // Позиція м'яча - де перехопили
+    updateBallPosition(interceptPos);
+    
+    // Оновлюємо дисплей
+    updateMultiplierDisplay();
+    
+    const upperFlankAttackers = ['LM', 'ALM', 'CF2'];
+    const lowerFlankAttackers = ['CF', 'ARM', 'RM'];
+    const defenders = ['LD', 'LCD', 'RCD', 'RD'];
+    const isDefender = defenders.includes(newBallHolder);
+    
+    // Визначаємо фланг за позицією перехоплення (y координата)
+    // y <= 4 - верхній фланг, y > 4 - нижній
+    let newFlank;
+    if (isDefender) {
+        // Захисник перехопив - визначаємо фланг за Y позицією перехоплення
+        newFlank = interceptPos.y <= 4 ? 'upper' : 'lower';
+    } else {
+        // Атакуючий перехопив
+        newFlank = upperFlankAttackers.includes(newBallHolder) ? 'upper' : 'lower';
+    }
+    
+    const newPassX = 8 + gameState.attackDepth;
+    
+    const positions = {};
+    
+    // Ball holder на місці перехоплення
+    positions[newBallHolder] = { x: interceptPos.x, y: interceptPos.y };
+    
+    // Визначаємо порожню клітинку яку має заповнити free attacker
+    // Якщо LM ball holder - CF2 заповнює y=1
+    // Якщо RM ball holder - ARM заповнює y=8
+    // Якщо ALM ball holder - CF2 заповнює y=3
+    // Якщо CF ball holder - ARM заповнює y=6
+    
+    // Розставляємо ВСІХ атакуючих гравців
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => {
+        if (player === newBallHolder) return; // Ball holder вже встановлено
+        
+        if (player === 'LM') {
+            positions['LM'] = { x: newPassX, y: 1 };
+        } else if (player === 'RM') {
+            positions['RM'] = { x: newPassX, y: 8 };
+        } else if (player === 'ALM') {
+            positions['ALM'] = { x: newPassX, y: 3 };
+        } else if (player === 'CF') {
+            positions['CF'] = { x: newPassX, y: 6 };
+        } else if (player === 'CF2') {
+            // CF2 - free attacker верхнього флангу
+            if (newFlank === 'upper') {
+                // М'яч на верхньому фланзі - CF2 заповнює порожню клітинку
+                if (newBallHolder === 'LM') {
+                    // LM ball holder - CF2 на y=1
+                    positions['CF2'] = { x: newPassX, y: 1 };
+                } else if (newBallHolder === 'ALM') {
+                    // ALM ball holder - CF2 на y=3
+                    positions['CF2'] = { x: newPassX, y: 3 };
+                } else {
+                    // CF2 ball holder або захисник - CF2 free attacker
+                    positions['CF2'] = { x: newPassX + 1, y: 2 };
+                }
+            } else {
+                // М'яч на нижньому - CF2 free attacker
+                positions['CF2'] = { x: newPassX + 1, y: 2 };
+            }
+        } else if (player === 'ARM') {
+            // ARM - free attacker нижнього флангу
+            if (newFlank === 'lower') {
+                // М'яч на нижньому фланзі - ARM заповнює порожню клітинку
+                if (newBallHolder === 'RM') {
+                    // RM ball holder - ARM на y=8
+                    positions['ARM'] = { x: newPassX, y: 8 };
+                } else if (newBallHolder === 'CF') {
+                    // CF ball holder - ARM на y=6
+                    positions['ARM'] = { x: newPassX, y: 6 };
+                } else {
+                    // ARM ball holder або захисник - ARM free attacker
+                    positions['ARM'] = { x: newPassX + 1, y: 7 };
+                }
+            } else {
+                // М'яч на верхньому - ARM free attacker
+                positions['ARM'] = { x: newPassX + 1, y: 7 };
+            }
+        }
+    });
+    
+    // Для currentFormation зберігаємо "віртуальні" позиції
+    // Free attacker на фланзі м'яча має бути з y=3 або y=6 (не y=2 або y=7)
+    // щоб generateNextFormation правильно його обробив
+    const formationPositions = {};
+    Object.entries(positions).forEach(([player, coords]) => {
+        if (player === 'CF2') {
+            if (isDefender && newFlank === 'upper') {
+                // Захисник перехопив на верхньому - CF2 віртуально на y=3
+                formationPositions[player] = { x: coords.x, y: 3 };
+            } else if (coords.y === 2) {
+                // CF2 free attacker на нижньому фланзі - залишаємо y=2
+                formationPositions[player] = { ...coords };
+            } else {
+                formationPositions[player] = { ...coords };
+            }
+        } else if (player === 'ARM') {
+            if (isDefender && newFlank === 'lower') {
+                // Захисник перехопив на нижньому - ARM віртуально на y=6
+                formationPositions[player] = { x: coords.x, y: 6 };
+            } else if (coords.y === 7) {
+                // ARM free attacker на верхньому фланзі - залишаємо y=7
+                formationPositions[player] = { ...coords };
+            } else {
+                formationPositions[player] = { ...coords };
+            }
+        } else {
+            formationPositions[player] = { ...coords };
+        }
+    });
+    
+    // Для currentFormation потрібен "віртуальний" ballHolder
+    // Якщо реальний ballHolder - захисник, використовуємо атакуючого з того ж флангу
+    let formationBallHolder = newBallHolder;
+    if (isDefender) {
+        // Захисник перехопив - вибираємо "віртуального" атакуючого з флангу перехоплення
+        formationBallHolder = newFlank === 'upper' ? 'ALM' : 'CF';
+    }
+    
+    gameState.currentFormation = {
+        ballHolder: formationBallHolder,
+        positions: formationPositions
+    };
+    
+    // Рухаємо атакуючих гравців на РЕАЛЬНІ позиції
+    Object.entries(positions).forEach(([p, coords]) => {
+        if (coords) movePlayerTo('team1', p, coords);
+    });
+    
+    // Рухаємо захисників team1
+    movePlayerDefendersToStep(gameState.attackDepth);
+    
+    // Рухаємо суперників назад
+    moveOpponentsToStep(gameState.attackDepth);
+    
+    updateMultiplierDisplay();
+    updatePhaseDisplay('ATTACK', 'SELECT PASS TARGET');
+    
+    setTimeout(() => generatePassTargets(), 300);
+}
+
+function moveOpponentsForwardDefense(targetPos) {
+    updateBallPosition(targetPos);
+    const receiver = gameState.opponentAttackingLine.find(att => att.targetCoords.x === targetPos.x && att.targetCoords.y === targetPos.y);
+    if (!receiver) return;
+    const newBallHolder = receiver.position, step = gameState.defenseDepth;
+    const currentFormation = gameState.opponentFormation || opponentAttackFormations['0_start'];
+    const newFormation = generateNextFormationDefense(step, newBallHolder, currentFormation);
+    gameState.opponentFormation = newFormation; gameState.opponentBallHolder = newBallHolder;
+    setTimeout(() => { Object.entries(newFormation.positions).forEach(([p, coords]) => movePlayerTo('team2', p, coords)); }, 300);
+}
+
+function generateNextFormationDefense(step, newBallHolder, prevFormation) {
+    const prevBallHolder = prevFormation.ballHolder, prevPositions = prevFormation.positions;
+    const upperFlank = ['LM', 'ALM', 'CF2'];
+    const prevFlank = upperFlank.includes(prevBallHolder) ? 'upper' : 'lower', newFlank = upperFlank.includes(newBallHolder) ? 'upper' : 'lower';
+    const sameFlank = prevFlank === newFlank, newPassX = 7 - step, newBHPos = prevPositions[newBallHolder], emptyRow = newBHPos.y;
+    const newPositions = {};
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => {
+        const playerFlank = upperFlank.includes(player) ? 'upper' : 'lower', prevPos = prevPositions[player];
+        if (player === newBallHolder) newPositions[player] = { ...prevPos };
+        else if (player === prevBallHolder) { if (sameFlank) newPositions[player] = { x: newPassX, y: emptyRow }; else newPositions[player] = { x: newPassX - 1, y: playerFlank === 'upper' ? 2 : 7 }; }
+        else if (prevPos.y === 2 || prevPos.y === 7) { if (!sameFlank && playerFlank === newFlank) newPositions[player] = { x: newPassX, y: emptyRow }; else newPositions[player] = { x: newPassX - 1, y: playerFlank === 'upper' ? 2 : 7 }; }
+        else newPositions[player] = { x: newPassX, y: prevPos.y };
+    });
+    return { ballHolder: newBallHolder, prevBallHolder, positions: newPositions };
+}
+
+function movePlayersBackDefense() {
+    const stepIndex = Math.min(gameState.defenseDepth, defenseFormations.length - 1);
+    const formation = defenseFormations[stepIndex];
+    Object.entries(formation).forEach(([pos, coords]) => movePlayerTo('team1', pos, coords));
+}
+
+// ==========================================
+// OPPONENT STRIKE
+// ==========================================
+function opponentShoot(isStrikePosition = false) { 
+    gameState.phase = 'opponent_strike'; 
+    updatePhaseDisplay('SAVE', 'SAVE THE SHOT!'); 
+    movePlayersToOpponentStrikePosition(isStrikePosition); 
+    setTimeout(() => generateOpponentStrikeChoices(), 500); 
+}
+
+function movePlayersToOpponentStrikePosition(isStrikePosition = false) {
+    const ballHolder = gameState.opponentBallHolder;
+    const ballHolderPos = gameState.opponentPositions[ballHolder];
+    
+    if (isStrikePosition) {
+        // Strike Position - ball holder залишається на місці, б'є звідти
+        // Не рухаємо гравців, тільки оновлюємо ball position (вже оновлено раніше)
+        return;
+    }
+    
+    // Звичайний удар - ball holder рухається до воріт
+    const bhStrikePos = { x: 1, y: ballHolderPos ? ballHolderPos.y : 4 };
+    updateBallPosition(bhStrikePos);
+    ['LM', 'ALM', 'CF2', 'CF', 'ARM', 'RM'].forEach(player => { 
+        const currentPos = gameState.opponentPositions[player]; 
+        if (!currentPos) return; 
+        if (player === ballHolder) movePlayerTo('team2', player, bhStrikePos); 
+        else movePlayerTo('team2', player, { x: 2, y: currentPos.y }); 
+    });
+    const defenders = ['LD', 'LCD', 'RCD', 'RD'];
+    let defInFront = null, minDist = Infinity;
+    defenders.forEach(def => { 
+        const defPos = gameState.playerPositions[def]; 
+        if (defPos && ballHolderPos && Math.abs(defPos.y - ballHolderPos.y) < minDist) { 
+            minDist = Math.abs(defPos.y - ballHolderPos.y); 
+            defInFront = def; 
+        } 
+    });
+    defenders.forEach(def => { 
+        const defPos = gameState.playerPositions[def]; 
+        if (!defPos) return; 
+        if (def === defInFront && ballHolderPos) movePlayerTo('team1', def, { x: 2, y: ballHolderPos.y }); 
+        else movePlayerTo('team1', def, { x: 1, y: defPos.y }); 
+    });
+}
+
+function generateOpponentStrikeChoices() {
+    const settings = DIFFICULTY_SETTINGS[gameState.difficulty];
+    gameState.availableChoices = []; gameState.winningCells = []; gameState.losingCells = []; gameState.specialCells = [];
+    
+    let goalPositions;
+    if (gameState.difficulty === 'hard') {
+        // Hard режим: тільки кути воріт (фланги)
+        goalPositions = [{ x: 0, y: 3 }, { x: 0, y: 6 }];
+    } else {
+        // Easy режим: всі 4 клітинки воріт
+        goalPositions = [{ x: 0, y: 3 }, { x: 0, y: 4 }, { x: 0, y: 5 }, { x: 0, y: 6 }];
+    }
+    
+    gameState.availableChoices = [...goalPositions];
+    const shuffled = [...goalPositions].sort(() => Math.random() - 0.5);
+    shuffled.forEach((pos, i) => { if (i < settings.winningCells) gameState.winningCells.push(pos); else gameState.losingCells.push(pos); });
+    
+    // Corner оборони - одна на крок, 50% шанс
+    if (Math.random() < 0.5 && gameState.losingCells.length > 0) {
+        const randomIndex = Math.floor(Math.random() * gameState.losingCells.length);
+        gameState.specialCells.push(gameState.losingCells[randomIndex]);
+    }
+    
+    highlightAvailableCells();
+}
+
+function processOpponentStrikeChoice(pos, isWinning, isSpecial) {
+    if (isWinning) { 
+        // Сейв = перехоплення, продовжуємо гру з наступним мультиплікатором
+        updatePhaseDisplay('SAVE', 'SAVED!'); 
+        
+        // Якщо multiplierLevel = 0, встановлюємо 1 (перший рівень)
+        if (gameState.multiplierLevel === 0) {
+            gameState.multiplierLevel = 1;
+        }
+        
+        // Використовуємо логіку перехоплення - продовжуємо атаку
+        const savePos = { x: 1, y: pos.y }; // Позиція воротаря
+        setTimeout(() => startAttackAfterIntercept(savePos, 'GK'), 1000);
+    }
+    else { 
+        if (isSpecial) { 
+            updatePhaseDisplay('SAVE', 'CORNER - OPPONENT!'); 
+            gameState.defenseDepth = 0; 
+            
+            // Визначаємо фланг (верхній/нижній) залежно від удару
+            const flank = pos.y <= 4 ? 'upper' : 'lower';
+            
+            setTimeout(() => setupOpponentCornerKickFormation(flank), 1000); 
+        } else { 
+            gameState.opponentScore++; 
+            updateScore(); 
+            updatePhaseDisplay('SAVE', 'GOAL - OPPONENT!'); 
+            // Після голу суперника - скидаємо мультиплікатор і показуємо bet UI
+            setTimeout(() => switchToDefense(), 2000);
+        } 
+    }
+}
+
+// ==========================================
+// OPPONENT CORNER (DEFENSE)
+// ==========================================
+
+function setupOpponentCornerKickFormation(flank) {
+    gameState.phase = 'opponent_corner_pass';
+    
+    // Координати стовпчиків (Дзеркально до N=13, O=14, P=15)
+    // 15->0, 14->1, 13->2 ...
+    const A=0, B=1, C=2, D=3, E=4, F=5, G=6;
+    
+    let kicker;
+    let cornerPos;
+    
+    if (flank === 'upper') {
+        // --- ЛІВИЙ КУТОВИЙ СУПЕРНИКА (Upper - y=0) ---
+        // М'яч на A1 (0,0)
+        kicker = 'ALM';
+        cornerPos = { x: A, y: 0 };
+        
+        // 🔴 ЧЕРВОНІ (Team 2 - Attack) - Дзеркально до синіх в атаці
+        const oppPositions = {
+            'ALM': cornerPos,      // Kicker
+            'LM':  { x: C, y: 3 }, // Mirror of N4 (13,3 -> 2,3)
+            'CF':  { x: B, y: 3 }, // Mirror of O4 (14,3 -> 1,3)
+            'RM':  { x: C, y: 5 }, // Mirror of N6 (13,5 -> 2,5)
+            'CF2': { x: B, y: 5 }, // Mirror of O6 (14,5 -> 1,5)
+            'ARM': { x: E, y: 5 }  // Mirror of L6 (11,5 -> 4,5)
+        };
+        
+        // 🔵 СИНІ (Team 1 - Defense) - Дзеркально до червоних в захисті
+        const myPositions = {
+            'LD':  { x: C, y: 4 }, // Mirror of N5
+            'LCD': { x: B, y: 4 }, // Mirror of O5
+            'RCD': { x: C, y: 6 }, // Mirror of N7
+            'RD':  { x: B, y: 6 }, // Mirror of O7
+            'LM':  { x: B, y: 1 }, // Mirror of O2 (14,1 -> 1,1)
+            'ALM': { x: E, y: 3 }, // Mirror of L4
+            'CF':  { x: G, y: 3 }, // Mirror of J4
+            'CF2': { x: G, y: 6 }, // Mirror of J7
+            'ARM': { x: E, y: 6 }, // Mirror of L7
+            'RM':  { x: C, y: 8 }  // Mirror of N9
+        };
+        
+        Object.entries(myPositions).forEach(([p, coords]) => movePlayerTo('team1', p, coords));
+        Object.entries(oppPositions).forEach(([p, coords]) => movePlayerTo('team2', p, coords));
+        
+    } else {
+        // --- ПРАВИЙ КУТОВИЙ СУПЕРНИКА (Lower - y=9) ---
+        // М'яч на A10 (0,9)
+        kicker = 'ARM';
+        cornerPos = { x: A, y: 9 };
+        
+        // 🔴 ЧЕРВОНІ (Team 2 - Attack)
+        const oppPositions = {
+            'ARM': cornerPos,      // Kicker
+            'LM':  { x: C, y: 4 }, // Mirror N5
+            'CF':  { x: B, y: 4 }, // Mirror O5
+            'RM':  { x: C, y: 6 }, // Mirror N7
+            'CF2': { x: B, y: 6 }, // Mirror O7
+            'ALM': { x: E, y: 4 }  // Mirror L5
+        };
+        
+        // 🔵 СИНІ (Team 1 - Defense)
+        const myPositions = {
+            'LCD': { x: C, y: 3 }, // Mirror N4
+            'LD':  { x: B, y: 3 }, // Mirror O4
+            'RD':  { x: C, y: 5 }, // Mirror N6
+            'RCD': { x: B, y: 5 }, // Mirror O6
+            'LM':  { x: C, y: 1 }, // Mirror N2
+            'ALM': { x: E, y: 3 }, // Mirror L4
+            'ARM': { x: E, y: 6 }, // Mirror L7
+            'RM':  { x: B, y: 8 }  // Mirror O9
+        };
+        
+        Object.entries(myPositions).forEach(([p, coords]) => movePlayerTo('team1', p, coords));
+        Object.entries(oppPositions).forEach(([p, coords]) => movePlayerTo('team2', p, coords));
+    }
+    
+    gameState.opponentBallHolder = kicker;
+    updateBallPosition(cornerPos);
+    updatePhaseDisplay('DEFENSE', 'BLOCK THE CROSS');
+    
+    generateOpponentCornerTargets(flank);
+}
+
+function generateOpponentCornerTargets(flank) {
+    const settings = DIFFICULTY_SETTINGS[gameState.difficulty];
+    gameState.availableChoices = [];
+    gameState.winningCells = [];
+    gameState.losingCells = [];
+    
+    // Координати B=1, C=2
+    const B=1, C=2;
+    
+    let targets = [];
+    
+    if (gameState.difficulty === 'hard') {
+        // Hard режим: тільки 2 опції
+        if (flank === 'upper') {
+            targets = [
+                { x: C, y: 3 }, // LM
+                { x: B, y: 5 }  // CF2
+            ];
+        } else {
+            targets = [
+                { x: C, y: 4 }, // LM
+                { x: B, y: 6 }  // CF2
+            ];
+        }
+    } else {
+        // Easy режим: всі 4 опції
+        if (flank === 'upper') {
+            targets = [
+                { x: C, y: 3 }, // LM
+                { x: B, y: 3 }, // CF
+                { x: C, y: 5 }, // RM
+                { x: B, y: 5 }  // CF2
+            ];
+        } else {
+            targets = [
+                { x: C, y: 4 }, // LM
+                { x: B, y: 4 }, // CF
+                { x: C, y: 6 }, // RM
+                { x: B, y: 6 }  // CF2
+            ];
+        }
+    }
+    
+    gameState.availableChoices = [...targets];
+    
+    // Визначаємо виграшні (перехоплення) та програшні (удар) клітинки
+    // Логіка схожа на звичайний захист: random + settings
+    const shuffled = [...targets].sort(() => Math.random() - 0.5);
+    shuffled.forEach((t, i) => {
+        // У захисті winningCells - це успішне перехоплення
+        if (i < settings.winningCells) gameState.winningCells.push(t);
+        else gameState.losingCells.push(t);
+    });
+    
+    highlightAvailableCells();
+}
+
+function processOpponentCornerPassChoice(pos, isWinning) {
+    // Анімація м'яча до цілі
+    updateBallPosition(pos);
+    
+    // Знаходимо, хто отримав (червоний гравець)
+    let receiver = null;
+    for(let [p, c] of Object.entries(gameState.opponentPositions)) {
+        if(c.x === pos.x && c.y === pos.y) {
+            receiver = p;
+            break;
+        }
+    }
+    if (receiver) gameState.opponentBallHolder = receiver;
+
+    if (isWinning) {
+        // Успішне перехоплення - працює як звичайне перехоплення
+        const interceptor = interceptPassByTeam1(pos);
+        updatePhaseDisplay('DEFENSE', 'CLEARED!');
+        
+        // Перехід в атаку з 2-го рівня мультиплікатора (як звичайне перехоплення)
+        setTimeout(() => startAttackAfterIntercept(pos, interceptor), 1000);
+    } else {
+        // Пропустили пас -> Удар головою
+        setTimeout(() => {
+            updatePhaseDisplay('DEFENSE', 'HEADER!');
+            gameState.phase = 'opponent_strike';
+            
+            // Генеруємо цілі для сейву (ворота A3-A6)
+            // Використовуємо існуючу функцію, вона працює з x=0
+            generateOpponentStrikeChoices(); 
+        }, 800);
+    }
+}
+</script>
+</body>
+</html>
